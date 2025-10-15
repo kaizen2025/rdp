@@ -24,23 +24,21 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LaunchIcon from '@mui/icons-material/Launch';
 import PrintIcon from '@mui/icons-material/Print';
-import Visibility from '@mui/icons-material/Visibility';
-import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import LanguageIcon from '@mui/icons-material/Language';
 
+// --- CORRECTION : IMPORT MANQUANT ---
 import { useApp } from '../contexts/AppContext';
 import { useCache } from '../contexts/CacheContext';
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
 import UserAdActionsMenu from '../components/UserAdActionsMenu';
+import { AD_GROUPS, AD_GROUP_NAMES } from '../constants';
 
 const debounce = (func, wait) => {
     let timeout;
@@ -56,7 +54,7 @@ const AdGroupChip = memo(({ groupName, isMember, username, onMembershipChange })
     const handleToggle = async () => {
         setIsUpdating(true);
         const action = isMember ? 'removeUserFromGroup' : 'addUserToGroup';
-        const group = groupName === 'VPN' ? 'VPN' : 'Sortants_responsables';
+        const group = groupName === AD_GROUP_NAMES[AD_GROUPS.VPN] ? AD_GROUPS.VPN : AD_GROUPS.INTERNET;
         try {
             const result = await window.electronAPI[action]({ username, groupName: group });
             if (result.success) {
@@ -83,7 +81,18 @@ const AdGroupChip = memo(({ groupName, isMember, username, onMembershipChange })
 });
 
 const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint, onOpenAdMenu, isVpnMember, isInternetMember, onMembershipChange }) => (
-    <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, backgroundColor: isOdd ? 'action.hover' : 'inherit', borderBottom: '1px solid', borderColor: 'divider', '&:hover': { backgroundColor: 'action.selected' } }}>
+    <Box 
+        style={style} 
+        sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            px: 2, 
+            backgroundColor: isOdd ? 'action.hover' : 'inherit', 
+            borderBottom: '1px solid', 
+            borderColor: 'divider',
+            '&:hover': { backgroundColor: 'action.selected' } 
+        }}
+    >
         <Box sx={{ width: '18%', pr: 2, minWidth: 160, overflow: 'hidden' }}>
             <Typography variant="body2" fontWeight={500} noWrap>{user.displayName}</Typography>
             <Typography variant="caption" color="text.secondary">{user.username}</Typography>
@@ -97,8 +106,8 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>Office: ••••••••</Typography>
         </Box>
         <Box sx={{ width: '17%', display: 'flex', gap: 1, alignItems: 'center', pr: 2, minWidth: 180 }}>
-            <AdGroupChip groupName="VPN" isMember={isVpnMember} username={user.username} onMembershipChange={onMembershipChange} />
-            <AdGroupChip groupName="Internet" isMember={isInternetMember} username={user.username} onMembershipChange={onMembershipChange} />
+            <AdGroupChip groupName={AD_GROUP_NAMES[AD_GROUPS.VPN]} isMember={isVpnMember} username={user.username} onMembershipChange={onMembershipChange} />
+            <AdGroupChip groupName={AD_GROUP_NAMES[AD_GROUPS.INTERNET]} isMember={isInternetMember} username={user.username} onMembershipChange={onMembershipChange} />
         </Box>
         <Box sx={{ width: '20%', display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
             <Tooltip title="Modifier (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon fontSize="small" /></IconButton></Tooltip>
@@ -147,8 +156,8 @@ const UsersManagementPage = () => {
     const loadGroupMembers = useCallback(async (force = false) => {
         try {
             const [vpnResult, internetResult] = await Promise.all([
-                fetchWithCache('adGroup:VPN', () => window.electronAPI.getAdGroupMembers('VPN'), { force }),
-                fetchWithCache('adGroup:Sortants_responsables', () => window.electronAPI.getAdGroupMembers('Sortants_responsables'), { force })
+                fetchWithCache('adGroup:VPN', () => window.electronAPI.getAdGroupMembers(AD_GROUPS.VPN), { force }),
+                fetchWithCache('adGroup:Internet', () => window.electronAPI.getAdGroupMembers(AD_GROUPS.INTERNET), { force })
             ]);
             const vpnData = vpnResult.data || [];
             const internetData = internetResult.data || [];
@@ -184,15 +193,43 @@ const UsersManagementPage = () => {
     }, [users, searchTerm, serverFilter, departmentFilter]);
 
     const debouncedSetSearch = useMemo(() => debounce(setSearchTerm, 300), []);
-    const handleSaveUser = async (userData) => { /* ... (inchangé) ... */ };
-    const handleDeleteUser = async (user) => { /* ... (inchangé) ... */ };
-    const handleConnectUser = (user) => { /* ... (inchangé) ... */ };
+
+    const handleSaveUser = async (userData) => {
+        try {
+            const result = await window.electronAPI.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
+            if (result.success) {
+                showNotification('success', 'Utilisateur sauvegardé dans Excel.');
+                invalidate('users');
+                await loadUsers(true);
+            } else throw new Error(result.error);
+        } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
+        setUserDialogOpen(false);
+    };
+
+    const handleDeleteUser = async (user) => {
+        if (!window.confirm(`Supprimer ${user.username} du fichier Excel ?`)) return;
+        try {
+            const result = await window.electronAPI.deleteUserFromExcel({ username: user.username });
+            if (result.success) {
+                showNotification('success', 'Utilisateur supprimé d\'Excel.');
+                invalidate('users');
+                await loadUsers(true);
+            } else throw new Error(result.error);
+        } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
+    };
+
+    const handleConnectUser = (user) => {
+        if (!user.server) { showNotification('warning', 'Aucun serveur associé.'); return; }
+        window.electronAPI.connectWithStoredCredentials({ server: user.server, username: user.username, password: user.password });
+        showNotification('info', `Tentative de connexion à ${user.server}...`);
+    };
+
     const handlePrintUser = (user) => { setUserToPrint(user); setPrintPreviewOpen(true); };
     const clearFilters = () => { setSearchTerm(''); setServerFilter('all'); setDepartmentFilter('all'); };
 
     const handleOpenAdMenu = (event, user) => { setAdMenuAnchor(event.currentTarget); setSelectedUserForMenu(user); };
-    const handleCloseAdMenu = () => { setAdMenuAnchor(null); setSelectedUserForMenu(null); };
-    const handleAdActionComplete = (actionType) => { showNotification('success', `Action '${actionType}' terminée.`); loadUsers(true); };
+    const handleCloseAdMenu = () => { setAdMenuAnchor(null); };
+    const handleAdActionComplete = (actionType) => { showNotification('success', `Action '${actionType}' terminée.`); handleCloseAdMenu(); loadUsers(true); };
 
     const Row = useCallback(({ index, style }) => {
         const user = filteredUsers[index];

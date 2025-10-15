@@ -30,6 +30,9 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import WarningIcon from '@mui/icons-material/Warning';
 import LaptopIcon from '@mui/icons-material/Laptop';
 
+import { useApp } from '../contexts/AppContext';
+import { useElectronApi } from '../hooks/useElectronApi';
+
 // --- SOUS-COMPOSANTS ---
 
 const StatCard = memo(({ title, value, subtitle, color = 'primary.main', onClick }) => (
@@ -114,19 +117,7 @@ const ConnectedTechniciansWidget = memo(() => {
 });
 
 const RecentActivityWidget = memo(() => {
-    const [activities, setActivities] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    useEffect(() => {
-        const loadActivities = async () => {
-            setIsLoading(true);
-            try {
-                const history = await window.electronAPI.getLoanHistory({ limit: 5 });
-                setActivities(history || []);
-            } catch (error) { console.error('Erreur chargement activité:', error); } 
-            finally { setIsLoading(false); }
-        };
-        loadActivities();
-    }, []);
+    const { data: activities, isLoading } = useElectronApi('getLoanHistory', { params: [{ limit: 5 }] });
     const getActivityIcon = (eventType) => ({ created: <AssignmentIcon color="success" />, returned: <CheckCircleIcon color="primary" />, extended: <TrendingUpIcon color="info" />, cancelled: <CancelIcon color="error" /> }[eventType] || <HistoryIcon />);
     const getActivityText = (act) => {
         const computer = act.computerName || 'Matériel';
@@ -139,7 +130,7 @@ const RecentActivityWidget = memo(() => {
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}><HistoryIcon sx={{ mr: 1 }} /> Activité Récente</Typography>
             {isLoading ? <CircularProgress size={24} /> : (
                 <List dense>
-                    {activities.length > 0 ? activities.map(act => (
+                    {(activities && activities.length > 0) ? activities.map(act => (
                         <ListItem key={act.id} disableGutters>
                             <ListItemAvatar sx={{ minWidth: 36 }}>{getActivityIcon(act.eventType)}</ListItemAvatar>
                             <ListItemText primary={<Typography variant="body2">{getActivityText(act)}</Typography>} secondary={`Par ${act.by || 'Système'}`} />
@@ -168,27 +159,18 @@ const LoanListWidget = memo(({ title, loans, icon, navigate }) => (
 const DashboardPage = () => {
     const navigate = useNavigate();
     const { config } = useApp();
-    const [stats, setStats] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [overdueLoans, setOverdueLoans] = useState([]);
-    const [activeLoans, setActiveLoans] = useState([]);
+    const { data: stats, isLoading: isLoadingStats } = useElectronApi('getLoanStatistics');
+    const { data: loans, isLoading: isLoadingLoans } = useElectronApi('getLoans');
 
-    useEffect(() => {
-        const loadData = async () => {
-            setIsLoading(true);
-            try {
-                const [statsData, loansData] = await Promise.all([
-                    window.electronAPI.getLoanStatistics(),
-                    window.electronAPI.getLoans()
-                ]);
-                setStats(statsData);
-                setOverdueLoans(loansData.filter(l => l.status === 'overdue' || l.status === 'critical'));
-                setActiveLoans(loansData.filter(l => l.status === 'active'));
-            } catch (error) { console.error('Erreur chargement dashboard:', error); } 
-            finally { setIsLoading(false); }
+    const { activeLoans, overdueLoans } = useMemo(() => {
+        if (!loans) return { activeLoans: [], overdueLoans: [] };
+        return {
+            activeLoans: loans.filter(l => l.status === 'active'),
+            overdueLoans: loans.filter(l => l.status === 'overdue' || l.status === 'critical')
         };
-        loadData();
-    }, []);
+    }, [loans]);
+
+    const isLoading = isLoadingStats || isLoadingLoans;
 
     if (isLoading || !stats || !config) {
         return (<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress size={60} /></Box>);
