@@ -1,0 +1,121 @@
+/* src/components/UserPrintSheet.css - Styles optimisés pour l'impression PDF */
+
+/* 
+  ======================================
+  STYLES POUR L'APERÇU À L'ÉCRAN (PREVIEW)
+  ======================================
+*/
+@media screen {
+    /* Conteneur pour centrer la feuille de prévisualisation */
+    .print-preview-container {
+        background-color: #e0e0e0; /* Fond gris pour faire ressortir la feuille */
+        padding: 2rem;
+        min-height: 100vh;
+    }
+
+    /* Apparence de la feuille de papier à l'écran */
+    .print-sheet {
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        margin: 20px auto; /* Centrage horizontal */
+        max-width: 210mm; /* Assure que la largeur ne dépasse pas A4 */
+    }
+}
+
+/* 
+  ======================================
+  STYLES POUR L'IMPRESSION - PRIORITÉ ABSOLUE
+  ======================================
+*/
+@media print {
+    /* Configuration de la page d'impression */
+    @page {
+        size: A4 portrait; /* Format A4, orientation portrait */
+        margin: 15mm; /* Marges d'impression uniformes */
+    }
+    
+    /* Reset général pour forcer le rendu visuel à l'impression */
+    body, html {
+        background: white !important;
+        color: black !important;
+        width: 210mm;
+        height: 297mm;
+    }
+
+    * {
+        /* Force l'impression des couleurs de fond et de texte */
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        
+        /* Assure que les ombres et autres décorations sont retirées */
+        text-shadow: none !important;
+        box-shadow: none !important;
+    }
+    
+    /* Styles du conteneur principal de la fiche */
+    .print-sheet {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 210mm !important;
+        min-height: 297mm !important;
+        padding: 0 !important; /* Le padding est géré par @page margin */
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 10pt !important; /* Taille de police de base pour l'impression */
+        line-height: 1.3 !important;
+        page-break-after: always !important; /* Assure une nouvelle page après la fiche */
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+    }
+    
+    /* Masquer les éléments non pertinents à l'impression */
+    .no-print,
+    button,
+    .MuiButton-root,
+    .MuiDialog-root,
+    .MuiAppBar-root {
+        display: none !important;
+    }
+    
+    /* Empêcher les coupures de page au milieu des sections importantes */
+    .section-no-break,
+    .confidential-info,
+    .support-section {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    
+    /* Styles spécifiques pour les informations confidentielles */
+    .confidential-info {
+        background-color: #ffebee !important;
+        border: 2px solid #f44336 !important;
+    }
+    
+    .password-field {
+        font-family: 'Courier New', monospace !important;
+        font-weight: bold !important;
+        background-color: #ffcdd2 !important;
+        border: 1px dashed #f44336 !important;
+    }
+    
+    /* Styles pour la section de support */
+    .support-section {
+        background-color: #e3f2fd !important;
+        border: 1px solid #2196f3 !important;
+    }
+
+    /* Assurer que le footer reste en bas de la page si possible, sans être fixe */
+    .print-footer {
+        border-top: 1px solid #ccc !important;
+        padding-top: 8pt !important;
+        margin-top: 16pt !important;
+        page-break-before: auto; /* Le footer peut passer à la page suivante si nécessaire */
+    }
+
+    /* Assurer que les icônes et images s'impriment correctement */
+    img, svg {
+        max-width: 100% !important;
+    }
+}

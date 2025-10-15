@@ -1,0 +1,152 @@
+{
+  "appPasswordHash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+  "domain": "anecoopfr.local",
+  "username": "admin_anecoop",
+  "password": "vCQhNZ2aY2v!",
+  "rdp_port": 3389,
+  "auto_fullscreen": true,
+  "auto_admin_connect": true,
+  "defaultExcelPath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\Data_utilisateur_partage.xlsx",
+  "sharedJsonPath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\users.json",
+  "computersDbPath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\computers_loans.json",
+  "serversDbPath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\servers_info.json",
+  "syncInterval": 5,
+  "autoSync": true,
+  "debugMode": false,
+  "commandTimeout": 30,
+  "maxSessions": 100,
+  "connectionRetries": 3,
+  "pingTimeout": 5000,
+  "refreshInterval": 30000,
+  "maxHistoryEntries": 1000,
+  "rds_servers": [
+    "SRV-RDS-1",
+    "SRV-RDS-2", 
+    "SRV-RDS-3",
+    "SRV-RDS-4"
+  ],
+  "server_groups": {
+    "🏢 Infrastructure": [
+      "SRV-AD-1",
+      "SRV-AD-2",
+      "SRV-AD-FLORENSUD",
+      "SRV-DATA",
+      "SRV-VPN-EDI"
+    ],
+    "🖥️ Services RDS": [
+      "SRV-RDS-1",
+      "SRV-RDS-2",
+      "SRV-RDS-3",
+      "SRV-RDS-4",
+      "SRV-TSE-FLORENSUD"
+    ],
+    "📊 Applications": [
+      "HRM-V9",
+      "SAGERADIO64B",
+      "SAGESEI_DOMAINENOK",
+      "SRV-DIMENSION",
+      "SRV-HOROQUARTZ",
+      "SRV-ORACLE-SAGE",
+      "SRV-QLIKVIEW",
+      "SRV-QV",
+      "SRV-SYRACUSE",
+      "ServeurGED_DOMAINENOK",
+      "ServeurQV_DOMAINENOK"
+    ],
+    "🔧 Autres": [
+      "SRV-CENTOS-ZABBIX",
+      "SRV-DIA",
+      "SRWEXTRA01",
+      "SRWINTRA01"
+    ]
+  },
+  "ad_groups": {
+    "VPN": {
+      "description": "Groupe pour accès VPN",
+      "path": "anecoopfr.local/Users",
+      "type": "security"
+    },
+    "Sortants_responsables": {
+      "description": "Groupe pour accès Internet",
+      "path": "anecoopfr.local/Utilisateurs TSE",
+      "type": "security"
+    }
+  },
+  "it_technicians": [
+    {
+      "id": "kevin_bivia",
+      "name": "Kevin BIVIA",
+      "position": "Chef de projet",
+      "email": "kevin.bivia@anecoop.fr",
+      "phone": "",
+      "isActive": true,
+      "permissions": ["admin", "loans", "users", "servers", "reports"],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "avatar": "KB"
+    },
+    {
+      "id": "meher_benhassine", 
+      "name": "Meher BENHASSINE",
+      "position": "Chef de projet",
+      "email": "meher.benhassine@anecoop.fr",
+      "phone": "",
+      "isActive": true,
+      "permissions": ["admin", "loans", "users", "servers", "reports"],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "avatar": "MB"
+    },
+    {
+      "id": "christelle_moles",
+      "name": "Christelle MOLES", 
+      "position": "Responsable informatique",
+      "email": "christelle.moles@anecoop.fr",
+      "phone": "",
+      "isActive": true,
+      "permissions": ["admin", "loans", "users", "servers", "reports", "config"],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "avatar": "CM"
+    },
+    {
+      "id": "macha_anton",
+      "name": "Macha ANTON",
+      "position": "Alternante informatique", 
+      "email": "macha.anton@anecoop.fr",
+      "phone": "",
+      "isActive": true,
+      "permissions": ["loans", "users", "reports"],
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "avatar": "MA"
+    }
+  ],
+  "it_staff": ["Kevin", "Meher", "Macha", "Christelle"],
+  "notifications": {
+    "enabled": true,
+    "sessionAlerts": true,
+    "connectionAlerts": true,
+    "errorAlerts": true,
+    "loanReminders": true,
+    "overdueLoanAlerts": true
+  },
+  "security": {
+    "encryptPasswords": true,
+    "sessionTimeout": 3600000,
+    "maxLoginAttempts": 3,
+    "lockoutDuration": 300000,
+    "requireTechnicianSelection": true,
+    "trackUserActivity": true
+  },
+  "ui": {
+    "theme": "light",
+    "autoRefresh": true,
+    "showAdvancedOptions": false,
+    "compactView": false,
+    "showTechnicianInfo": true
+  },
+  "logging": {
+    "level": "info",
+    "maxLogSize": 10485760,
+    "retentionDays": 30,
+    "trackLoans": true,
+    "trackConnections": true
+  }
+}
