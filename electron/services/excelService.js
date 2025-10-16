@@ -1,4 +1,4 @@
-// electron/services/excelService.js - Version optimisée
+// electron/services/excelService.js - Version optimisée avec mise à jour mots de passe
 
 const XLSX = require('xlsx');
 const fs = require('fs');
@@ -19,7 +19,7 @@ async function readExcelFileAsync(excelPath) {
     // Vérifier le cache mémoire d'abord
     const now = Date.now();
     if (memoryCache && memoryCacheTimestamp && (now - memoryCacheTimestamp) < MEMORY_CACHE_TTL) {
-        console.log('📦 Utilisation cache mémoire Excel');
+        console.log('🔦 Utilisation cache mémoire Excel');
         return { success: true, users: memoryCache, fromMemoryCache: true };
     }
 
@@ -85,54 +85,92 @@ async function readExcelFileAsync(excelPath) {
     }
 }
 
-async function saveUserToExcel({ excelPath, user, isEdit }) {
+/**
+ * Sauvegarde ou met à jour un utilisateur dans Excel
+ * @param {Object} options - { user, isEdit }
+ * @returns {Promise}
+ */
+async function saveUserToExcel({ user, isEdit, excelPath }) {
     const finalPath = excelPath || configService.appConfig?.defaultExcelPath;
     
     try {
+        if (!finalPath) {
+            throw new Error('Chemin Excel non configuré');
+        }
+
         if (!fs.existsSync(finalPath)) {
             throw new Error(`Fichier introuvable: ${finalPath}`);
         }
 
         const workbook = XLSX.readFile(finalPath);
         const sheetName = workbook.SheetNames[0];
-        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet);
 
-        const excelRow = {
-            'Identifiant': user.identifiant,
-            'Mot de passe': user.motdepasse,
-            'Office': user.office,
-            'Nom complet': user.nomcomplet,
-            'Service': user.service,
-            'Email': user.email,
-            'Serveur': user.serveur,
-        };
-
-        const index = data.findIndex(row => row['Identifiant'] === excelRow['Identifiant']);
-        
-        if (isEdit && index !== -1) {
-            data[index] = excelRow;
-        } else {
-            data.push(excelRow);
+        // Mapper les propriétés de l'utilisateur vers les colonnes Excel
+        // En inverse : userKey => excelHeader
+        const reverseMapping = {};
+        for (const [excelHeader, userKey] of Object.entries(configService.EXCEL_CONFIG.columnMapping)) {
+            reverseMapping[userKey] = excelHeader;
         }
 
+        const excelRow = {};
+        for (const [userKey, userValue] of Object.entries(user)) {
+            const excelHeader = reverseMapping[userKey];
+            if (excelHeader) {
+                excelRow[excelHeader] = userValue;
+            }
+        }
+
+        // Trouver l'utilisateur dans Excel
+        const excelUsername = user.username;
+        const index = data.findIndex(row => {
+            const rowUsername = row[reverseMapping.username] || row['Identifiant'];
+            return rowUsername === excelUsername;
+        });
+        
+        if (isEdit && index !== -1) {
+            // Mettre à jour la ligne existante
+            data[index] = { ...data[index], ...excelRow };
+            console.log(`✅ Utilisateur ${excelUsername} mis à jour dans Excel`);
+        } else if (!isEdit) {
+            // Ajouter une nouvelle ligne
+            data.push(excelRow);
+            console.log(`✅ Utilisateur ${excelUsername} ajouté dans Excel`);
+        } else {
+            throw new Error(`Utilisateur ${excelUsername} non trouvé dans Excel`);
+        }
+
+        // Écrire dans le fichier Excel
         const newWb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWb, XLSX.utils.json_to_sheet(data), sheetName);
+        const newWs = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(newWb, newWs, sheetName);
         XLSX.writeFile(newWb, finalPath);
 
         // Invalider les caches
-        memoryCache = null;
-        memoryCacheTimestamp = null;
+        invalidateCache();
 
-        return { success: true };
+        return { success: true, message: `${isEdit ? 'Mis à jour' : 'Ajouté'} avec succès` };
+
     } catch (error) {
+        console.error('❌ Erreur sauvegarde Excel:', error.message);
         return { success: false, error: `Erreur sauvegarde Excel: ${error.message}` };
     }
 }
 
-async function deleteUserFromExcel({ excelPath, username }) {
+/**
+ * Supprime un utilisateur du fichier Excel
+ * @param {Object} options - { username, excelPath }
+ * @returns {Promise}
+ */
+async function deleteUserFromExcel({ username, excelPath }) {
     const finalPath = excelPath || configService.appConfig?.defaultExcelPath;
     
     try {
+        if (!finalPath) {
+            throw new Error('Chemin Excel non configuré');
+        }
+
         if (!fs.existsSync(finalPath)) {
             throw new Error(`Fichier introuvable: ${finalPath}`);
         }
@@ -140,23 +178,38 @@ async function deleteUserFromExcel({ excelPath, username }) {
         const workbook = XLSX.readFile(finalPath);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        const updatedData = data.filter(row => row['Identifiant'] !== username);
+
+        const reverseMapping = {};
+        for (const [excelHeader, userKey] of Object.entries(configService.EXCEL_CONFIG.columnMapping)) {
+            reverseMapping[userKey] = excelHeader;
+        }
+
+        const usernameColumn = reverseMapping.username || 'Identifiant';
+        const updatedData = data.filter(row => row[usernameColumn] !== username);
+
+        if (updatedData.length === data.length) {
+            throw new Error(`Utilisateur ${username} non trouvé`);
+        }
 
         const newWb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(newWb, XLSX.utils.json_to_sheet(updatedData), sheetName);
+        const newWs = XLSX.utils.json_to_sheet(updatedData);
+        XLSX.utils.book_append_sheet(newWb, newWs, sheetName);
         XLSX.writeFile(newWb, finalPath);
 
-        // Invalider les caches
-        memoryCache = null;
-        memoryCacheTimestamp = null;
+        invalidateCache();
 
-        return { success: true };
+        console.log(`✅ Utilisateur ${username} supprimé d'Excel`);
+        return { success: true, message: 'Supprimé avec succès' };
+
     } catch (error) {
+        console.error('❌ Erreur suppression Excel:', error.message);
         return { success: false, error: `Erreur suppression Excel: ${error.message}` };
     }
 }
 
-// Fonction pour invalider manuellement le cache si nécessaire
+/**
+ * Invalide les caches en mémoire et fichier
+ */
 function invalidateCache() {
     memoryCache = null;
     memoryCacheTimestamp = null;

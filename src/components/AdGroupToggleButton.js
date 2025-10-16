@@ -1,4 +1,4 @@
-// src/components/AdGroupToggleButton.js
+// src/components/AdGroupToggleButton.js - Version améliorée
 
 import React, { useState, useEffect } from 'react';
 import Button from '@mui/material/Button';
@@ -6,14 +6,22 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import DoNotDisturbOnIcon from '@mui/icons-material/DoNotDisturbOn';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import LanguageIcon from '@mui/icons-material/Language';
 import { useApp } from '../contexts/AppContext';
 
-const AdGroupToggleButton = ({ username, groupName, groupDisplayName, initialIsMember, onMembershipChange }) => {
+const AdGroupToggleButton = ({
+    username,
+    groupName,
+    groupDisplayName,
+    initialIsMember,
+    onMembershipChange
+}) => {
     const { showNotification } = useApp();
     const [isMember, setIsMember] = useState(initialIsMember);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // Mettre à jour l'état si la prop change (après un refresh global)
+    // Mettre à jour l'état si la prop change
     useEffect(() => {
         setIsMember(initialIsMember);
     }, [initialIsMember]);
@@ -22,16 +30,24 @@ const AdGroupToggleButton = ({ username, groupName, groupDisplayName, initialIsM
         setIsUpdating(true);
         const action = isMember ? 'removeUserFromGroup' : 'addUserToGroup';
         const actionVerb = isMember ? 'retiré de' : 'ajouté à';
+
         try {
-            const result = await window.electronAPI[action]({ username, groupName });
+            const result = await window.electronAPI[action]({
+                username,
+                groupName
+            });
+
             if (result.success) {
                 setIsMember(!isMember);
-                showNotification('success', `Utilisateur ${username} ${actionVerb} ${groupDisplayName}.`);
+                showNotification(
+                    'success',
+                    `${username} ${actionVerb} ${groupDisplayName}`
+                );
                 if (onMembershipChange) {
-                    onMembershipChange(); // Notifier le parent de rafraîchir les listes
+                    onMembershipChange();
                 }
             } else {
-                throw new Error(result.error || `Échec de l'opération pour le groupe ${groupDisplayName}.`);
+                throw new Error(result.error || `Échec de l'opération`);
             }
         } catch (error) {
             showNotification('error', `Erreur: ${error.message}`);
@@ -41,20 +57,31 @@ const AdGroupToggleButton = ({ username, groupName, groupDisplayName, initialIsM
     };
 
     const tooltipTitle = isMember
-        ? `Retirer ${username} du groupe ${groupDisplayName}`
-        : `Ajouter ${username} au groupe ${groupDisplayName}`;
+        ? `Retirer de ${groupDisplayName}`
+        : `Ajouter à ${groupDisplayName}`;
+
+    const getIcon = () => {
+        if (isUpdating) return <CircularProgress size={16} />;
+        if (isMember) return <CheckCircleIcon />;
+        if (groupName === 'VPN') return <VpnKeyIcon />;
+        return <LanguageIcon />;
+    };
 
     return (
         <Tooltip title={tooltipTitle}>
-            <span> {/* Le span est nécessaire pour que le Tooltip fonctionne sur un bouton désactivé */}
+            <span>
                 <Button
-                    variant="contained"
-                    color={isMember ? 'success' : 'error'}
+                    variant={isMember ? 'contained' : 'outlined'}
+                    color={isMember ? 'success' : 'inherit'}
                     size="small"
-                    startIcon={isUpdating ? <CircularProgress size={16} color="inherit" /> : (isMember ? <CheckCircleIcon /> : <DoNotDisturbOnIcon />)}
+                    startIcon={getIcon()}
                     onClick={handleToggleMembership}
                     disabled={isUpdating || !username}
-                    sx={{ minWidth: '110px', textTransform: 'none', fontWeight: 'bold' }}
+                    sx={{
+                        minWidth: '90px',
+                        textTransform: 'none',
+                        fontWeight: 500
+                    }}
                 >
                     {groupDisplayName}
                 </Button>

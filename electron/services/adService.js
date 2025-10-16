@@ -1,4 +1,4 @@
-// electron/services/adService.js - VERSION COMPLÈTE ET CORRIGÉE
+// electron/services/adService.js - VERSION FINALE, COMPLÈTE ET CORRIGÉE
 
 const { executeEncodedPowerShell } = require('./powershellService');
 
@@ -47,7 +47,7 @@ async function checkAdModule() {
             if ($module) {
                 @{isAvailable = $true; version = $module.Version.ToString()} | ConvertTo-Json -Compress
             } else {
-                @{isAvailable = false} | ConvertTo-Json -Compress
+                @{isAvailable = $false} | ConvertTo-Json -Compress
             }
         } catch {
             @{isAvailable = $false; error = $_.Exception.Message} | ConvertTo-Json -Compress
@@ -335,9 +335,7 @@ async function resetAdUserPassword(username, newPassword, mustChangePassword = t
             Import-Module ActiveDirectory -ErrorAction Stop
             $securePassword = ConvertTo-SecureString "${escapeParam(newPassword)}" -AsPlainText -Force
             Set-ADAccountPassword -Identity "${escapeParam(username)}" -NewPassword $securePassword -Reset -ErrorAction Stop
-            if ($${mustChangePassword}) {
-                Set-ADUser -Identity "${escapeParam(username)}" -ChangePasswordAtLogon $true -ErrorAction Stop
-            }
+            Set-ADUser -Identity "${escapeParam(username)}" -ChangePasswordAtLogon $${mustChangePassword} -ErrorAction Stop
             @{ success = $true; message = "Mot de passe réinitialisé avec succès" } | ConvertTo-Json -Compress
         } catch {
             @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
@@ -360,21 +358,23 @@ async function getAdUserDetails(username) {
         try {
             Import-Module ActiveDirectory -ErrorAction Stop
             $user = Get-ADUser -Identity "${username}" -Properties * -ErrorAction Stop
+            $groups = Get-ADPrincipalGroupMembership -Identity $user | Select-Object -ExpandProperty Name
             @{
                 success = $true
                 user = @{
                     username = $user.SamAccountName; displayName = $user.DisplayName; firstName = $user.GivenName;
                     lastName = $user.Surname; email = $user.EmailAddress; enabled = $user.Enabled;
-                    description = $user.Description; lastLogon = $user.LastLogonDate; created = $user.Created;
-                    modified = $user.Modified; distinguishedName = $user.DistinguishedName;
+                    description = $user.Description; lastLogon = $user.LastLogonDate; passwordLastSet = $user.PasswordLastSet;
+                    created = $user.Created; modified = $user.Modified; distinguishedName = $user.DistinguishedName;
                 }
-            } | ConvertTo-Json -Compress -Depth 3
+                groups = $groups
+            } | ConvertTo-Json -Compress -Depth 4
         } catch {
             @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
         }
     `;
     try {
-        const result = await executeEncodedPowerShell(psScript, 15000);
+        const result = await executeEncodedPowerShell(psScript, 20000);
         const parsedResult = JSON.parse(result);
         if (!parsedResult.success) {
             parsedResult.error = parseAdError(parsedResult.error);

@@ -1,4 +1,4 @@
-// electron/preload.js - Pont sécurisé entre le backend Electron et le frontend React
+// electron/preload.js - COMPLET ET CORRIGÉ
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteComputer: (id) => ipcRenderer.invoke('delete-computer', id),
     getLoans: () => ipcRenderer.invoke('get-loans'),
     createLoan: (loan) => ipcRenderer.invoke('create-loan', loan),
-    returnLoan: (id, notes) => ipcRenderer.invoke('return-loan', id, notes),
+    returnLoan: (id, notes, accessoryInfo) => ipcRenderer.invoke('return-loan', id, notes, accessoryInfo),
     extendLoan: (id, date, reason) => ipcRenderer.invoke('extend-loan', id, date, reason),
     cancelLoan: (id, reason) => ipcRenderer.invoke('cancel-loan', id, reason),
     addComputerMaintenance: (computerId, maintenanceData) => ipcRenderer.invoke('add-computer-maintenance', computerId, maintenanceData),
@@ -36,6 +36,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateLoanSettings: (settings) => ipcRenderer.invoke('update-loan-settings', settings),
     getLoanHistory: (filters) => ipcRenderer.invoke('get-loan-history', filters),
     getLoanStatistics: () => ipcRenderer.invoke('get-loan-statistics'),
+
+    // --- ACCESSOIRES ---
+    getAccessories: () => ipcRenderer.invoke('get-accessories'),
+    saveAccessory: (accessory) => ipcRenderer.invoke('save-accessory', accessory),
+    deleteAccessory: (id) => ipcRenderer.invoke('delete-accessory', id),
 
     // --- NOTIFICATIONS DE PRÊT ---
     getNotifications: () => ipcRenderer.invoke('get-notifications'),
@@ -51,8 +56,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     addUserToGroup: (args) => ipcRenderer.invoke('add-user-to-group', args),
     removeUserFromGroup: (args) => ipcRenderer.invoke('remove-user-from-group', args),
     isUserInGroup: (args) => ipcRenderer.invoke('is-user-in-group', args),
-    testAdGroups: () => ipcRenderer.invoke('test-ad-groups'),
-    discoverAdSecurityGroups: () => ipcRenderer.invoke('discover-ad-security-groups'),
+    createAdUser: (userData) => ipcRenderer.invoke('create-ad-user', userData),
+    modifyAdUser: (username, modifications) => ipcRenderer.invoke('modify-ad-user', username, modifications),
+    disableAdUser: (username) => ipcRenderer.invoke('disable-ad-user', username),
+    enableAdUser: (username) => ipcRenderer.invoke('enable-ad-user', username),
+    resetAdUserPassword: (username, newPassword, mustChange) => ipcRenderer.invoke('reset-ad-user-password', username, newPassword, mustChange),
+    getAdUserDetails: (username) => ipcRenderer.invoke('get-ad-user-details', username),
 
     // --- EXCEL ---
     syncExcelUsers: (path) => ipcRenderer.invoke('sync-excel-users', path),
@@ -65,7 +74,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getFavorites: () => ipcRenderer.invoke('get-favorites'),
     saveFavorites: (data) => ipcRenderer.invoke('save-favorites', data),
 
-    // --- CHAT AMÉLIORÉ ---
+    // --- CHAT ---
     'chat:getChannels': () => ipcRenderer.invoke('chat:getChannels'),
     'chat:addChannel': (name, description) => ipcRenderer.invoke('chat:addChannel', name, description),
     'chat:getMessages': (channelId) => ipcRenderer.invoke('chat:getMessages', channelId),
@@ -76,22 +85,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     'chat:addDm': (args) => ipcRenderer.invoke('chat:addDm', args),
     'chat:getUnreadCount': () => ipcRenderer.invoke('chat:getUnreadCount'),
     'chat:markAsRead': (channelId) => ipcRenderer.invoke('chat:markAsRead', channelId),
+    'chat:addReaction': (messageId, channelId, emoji) => ipcRenderer.invoke('chat:addReaction', messageId, channelId, emoji),
 
     // --- UTILITAIRES SYSTÈME ---
     pingServer: (server) => ipcRenderer.invoke('ping-server', server),
-    openPath: (path) => ipcRenderer.invoke('open-path', path),
     showNotification: (title, message) => ipcRenderer.invoke('show-notification', title, message),
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
+    openPath: (path) => ipcRenderer.invoke('open-path', path),
 
-    // --- ÉCOUTEUR POUR LES MISES À JOUR EN TEMPS RÉEL ---
+    // --- ÉCOUTEUR TEMPS RÉEL ---
     onDataUpdated: (callback) => {
         const listener = (event, ...args) => callback(...args);
         ipcRenderer.on('data-updated', listener);
-        // Retourne une fonction pour se désabonner de l'événement
         return () => ipcRenderer.removeListener('data-updated', listener);
-    },
-    removeDataUpdatedListener: () => { // Gardé pour la compatibilité si l'ancien code l'utilise
-        ipcRenderer.removeAllListeners('data-updated');
     },
 });
 

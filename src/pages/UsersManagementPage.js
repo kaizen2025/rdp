@@ -1,4 +1,4 @@
-// src/pages/UsersManagementPage.js - VERSION FINALE, COMPLÈTE ET CORRIGÉE
+// src/pages/UsersManagementPage.js - VERSION FINALE UTILISANT LE DIALOGUE D'ACTIONS AVANCÉ
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
@@ -16,132 +16,158 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
-import LinearProgress from '@mui/material/LinearProgress';
 import Chip from '@mui/material/Chip';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 
 // Icons
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LaunchIcon from '@mui/icons-material/Launch';
 import PrintIcon from '@mui/icons-material/Print';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import LanguageIcon from '@mui/icons-material/Language';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 
-// --- CORRECTION : IMPORT MANQUANT ---
 import { useApp } from '../contexts/AppContext';
 import { useCache } from '../contexts/CacheContext';
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
-import UserAdActionsMenu from '../components/UserAdActionsMenu';
+import AdActionsDialog from '../components/AdActionsDialog'; // Import du nouveau dialogue
 
 const debounce = (func, wait) => {
     let timeout;
-    return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); };
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func(...args), wait);
+    };
 };
 
-// --- SOUS-COMPOSANTS AMÉLIORÉS ---
+const CopyableText = memo(({ text, display, maxLength = 30 }) => {
+    const [copied, setCopied] = useState(false);
+    const displayText = display || text || '-';
+    const truncated = displayText.length > maxLength ? `${displayText.substring(0, maxLength)}...` : displayText;
 
-const AdGroupChip = memo(({ groupKey, groupConfig, isMember, username, onMembershipChange }) => {
-    const { showNotification } = useApp();
-    const [isUpdating, setIsUpdating] = useState(false);
-
-    const handleToggle = async () => {
-        setIsUpdating(true);
-        const action = isMember ? 'removeUserFromGroup' : 'addUserToGroup';
+    const copyToClipboard = useCallback(async () => {
+        if (!text) return;
         try {
-            const result = await window.electronAPI[action]({ username, groupName: groupKey });
-            if (result.success) {
-                showNotification('success', `Utilisateur ${isMember ? 'retiré de' : 'ajouté à'} ${groupConfig.description}.`);
-                if (onMembershipChange) onMembershipChange();
-            } else { throw new Error(result.error); }
-        } catch (error) { showNotification('error', `Erreur: ${error.message}`); } 
-        finally { setIsUpdating(false); }
-    };
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch (err) { console.error('Erreur copie:', err); }
+    }, [text]);
 
     return (
-        <Tooltip title={isMember ? `Retirer de ${groupConfig.description}` : `Ajouter à ${groupConfig.description}`}>
-            <Chip
-                icon={isUpdating ? <CircularProgress size={16} /> : (groupKey === 'VPN' ? <VpnKeyIcon /> : <LanguageIcon />)}
-                label={groupKey === 'Sortants_responsables' ? 'Internet' : groupKey}
-                color={isMember ? 'success' : 'default'}
-                onClick={handleToggle}
-                disabled={isUpdating}
-                size="small"
-                variant={isMember ? 'filled' : 'outlined'}
-            />
-        </Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" sx={{ cursor: 'pointer' }} title={text} onClick={copyToClipboard}>{truncated}</Typography>
+            <Tooltip title={copied ? 'Copié!' : 'Copier'}>
+                <IconButton size="small" onClick={copyToClipboard} sx={{ p: 0.2 }}>
+                    {copied ? <CheckCircleIcon fontSize="small" color="success" /> : <ContentCopyIcon sx={{ fontSize: '14px' }} />}
+                </IconButton>
+            </Tooltip>
+        </Box>
     );
 });
 
-const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint, onOpenAdMenu, adGroupsConfig, vpnMembers, internetMembers, onMembershipChange }) => (
-    <Box 
-        style={style} 
-        sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            px: 2, 
-            backgroundColor: isOdd ? 'action.hover' : 'inherit', 
-            borderBottom: '1px solid', 
-            borderColor: 'divider',
-            '&:hover': { backgroundColor: 'action.selected' } 
-        }}
-    >
-        <Box sx={{ width: '18%', pr: 2, minWidth: 160, overflow: 'hidden' }}>
-            <Typography variant="body2" fontWeight={500} noWrap>{user.displayName}</Typography>
-            <Typography variant="caption" color="text.secondary">{user.username}</Typography>
+const PasswordCompact = memo(({ password }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    if (!password) return <Typography variant="caption" color="text.secondary">-</Typography>;
+    return (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>{isVisible ? password : '••••••••'}</Typography>
+            <Tooltip title={isVisible ? 'Masquer' : 'Afficher'}>
+                <IconButton size="small" onClick={() => setIsVisible(!isVisible)} sx={{ p: 0.1 }}>
+                    {isVisible ? <VisibilityOff sx={{ fontSize: '12px' }} /> : <Visibility sx={{ fontSize: '12px' }} />}
+                </IconButton>
+            </Tooltip>
+            <CopyableText text={password} display="" />
         </Box>
-        <Box sx={{ width: '12%', pr: 2, minWidth: 100, overflow: 'hidden' }}><Typography variant="body2" noWrap>{user.department || '-'}</Typography></Box>
-        <Box sx={{ width: '18%', pr: 2, minWidth: 160, overflow: 'hidden' }}>
-            <Tooltip title={user.email || ''}><Typography variant="body2" noWrap>{user.email || '-'}</Typography></Tooltip>
-        </Box>
-        <Box sx={{ width: '15%', pr: 2, minWidth: 140, overflow: 'hidden' }}>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>Win: ••••••••</Typography>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>Office: ••••••••</Typography>
-        </Box>
-        <Box sx={{ width: '17%', display: 'flex', gap: 1, alignItems: 'center', pr: 2, minWidth: 180 }}>
-            {Object.entries(adGroupsConfig).map(([key, config]) => (
-                <AdGroupChip
-                    key={key}
-                    groupKey={key}
-                    groupConfig={config}
-                    isMember={key === 'VPN' ? vpnMembers.has(user.username) : internetMembers.has(user.username)}
-                    username={user.username}
-                    onMembershipChange={onMembershipChange}
-                />
-            ))}
-        </Box>
-        <Box sx={{ width: '20%', display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
-            <Tooltip title="Modifier (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Connexion RDP"><IconButton size="small" onClick={() => onConnect(user)}><LaunchIcon fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Imprimer Fiche"><IconButton size="small" color="info" onClick={() => onPrint(user)}><PrintIcon fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Actions Active Directory"><IconButton size="small" onClick={(e) => onOpenAdMenu(e, user)}><MoreVertIcon fontSize="small" /></IconButton></Tooltip>
-            <Tooltip title="Supprimer (Excel)"><IconButton size="small" color="error" onClick={() => onDelete(user)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-        </Box>
-    </Box>
-));
+    );
+});
 
-const TableHeader = memo(() => (
-    <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', borderBottom: '2px solid', borderColor: 'primary.dark' }}>
-        <Box sx={{ width: '18%', pr: 2, minWidth: 160 }}><Typography variant="subtitle2" fontWeight={600}>Utilisateur</Typography></Box>
-        <Box sx={{ width: '12%', pr: 2, minWidth: 100 }}><Typography variant="subtitle2" fontWeight={600}>Service</Typography></Box>
-        <Box sx={{ width: '18%', pr: 2, minWidth: 160 }}><Typography variant="subtitle2" fontWeight={600}>Email</Typography></Box>
-        <Box sx={{ width: '15%', pr: 2, minWidth: 140 }}><Typography variant="subtitle2" fontWeight={600}>Mots de passe</Typography></Box>
-        <Box sx={{ width: '17%', pr: 2, minWidth: 180 }}><Typography variant="subtitle2" fontWeight={600}>Groupes Sécurité</Typography></Box>
-        <Box sx={{ width: '20%', textAlign: 'right' }}><Typography variant="subtitle2" fontWeight={600}>Actions</Typography></Box>
-    </Box>
-));
+const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
+    const isVpn = groupName === 'VPN';
+    const icon = isVpn ? <VpnKeyIcon sx={{ fontSize: '14px' }} /> : <LanguageIcon sx={{ fontSize: '14px' }} />;
+    const displayName = isVpn ? 'VPN' : 'INT';
+    const chip = (
+        <Chip
+            size="small"
+            icon={isLoading ? <CircularProgress size={14} /> : icon}
+            label={displayName}
+            color={isMember ? (isVpn ? 'primary' : 'success') : 'default'}
+            variant={isMember ? 'filled' : 'outlined'}
+            onClick={onToggle}
+            disabled={isLoading}
+            sx={{ height: 22, fontSize: '10px', fontWeight: 700 }}
+        />
+    );
+    return <Tooltip title={`${isMember ? 'Retirer de' : 'Ajouter à'} ${groupName}`}>{chip}</Tooltip>;
+});
+
+const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint, onOpenAdMenu, vpnMembers, internetMembers, onMembershipChange }) => {
+    const { showNotification } = useApp();
+    const [isUpdatingVpn, setIsUpdatingVpn] = useState(false);
+    const [isUpdatingInternet, setIsUpdatingInternet] = useState(false);
+
+    const toggleGroup = useCallback(async (group, isMember, setLoading) => {
+        setLoading(true);
+        try {
+            const action = isMember ? 'removeUserFromGroup' : 'addUserToGroup';
+            const result = await window.electronAPI[action]({ username: user.username, groupName: group });
+            if (result.success) {
+                showNotification('success', `${user.username} ${isMember ? 'retiré de' : 'ajouté à'} ${group}`);
+                onMembershipChange();
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            showNotification('error', `Erreur: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    }, [user.username, onMembershipChange, showNotification]);
+
+    return (
+        <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1, backgroundColor: isOdd ? 'grey.50' : 'white', borderBottom: '1px solid #e0e0e0', '&:hover': { backgroundColor: 'action.hover' }, gap: 2 }}>
+            <Box sx={{ flex: '1 1 150px', minWidth: 120 }}>
+                <Typography variant="body2" fontWeight="bold">{user.displayName}</Typography>
+                <CopyableText text={user.username} display={user.username} />
+            </Box>
+            <Box sx={{ flex: '0.8 1 100px', minWidth: 80 }}><Typography variant="body2">{user.department || '-'}</Typography></Box>
+            <Box sx={{ flex: '1.2 1 180px', minWidth: 150 }}><CopyableText text={user.email} display={user.email} /></Box>
+            <Box sx={{ flex: '1 1 160px', minWidth: 140 }}>
+                <PasswordCompact password={user.password} />
+                <PasswordCompact password={user.officePassword} />
+            </Box>
+            <Box sx={{ flex: '1 1 120px', minWidth: 100, display: 'flex', gap: 1 }}>
+                <AdGroupBadge groupName="VPN" isMember={vpnMembers.has(user.username)} onToggle={() => toggleGroup('VPN', vpnMembers.has(user.username), setIsUpdatingVpn)} isLoading={isUpdatingVpn} />
+                <AdGroupBadge groupName="Sortants_responsables" isMember={internetMembers.has(user.username)} onToggle={() => toggleGroup('Sortants_responsables', internetMembers.has(user.username), setIsUpdatingInternet)} isLoading={isUpdatingInternet} />
+            </Box>
+            <Box sx={{ flex: '0 0 auto', display: 'flex' }}>
+                <Tooltip title="Connexion RDP"><IconButton size="small" onClick={() => onConnect(user)}><LaunchIcon /></IconButton></Tooltip>
+                <Tooltip title="Éditer (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon /></IconButton></Tooltip>
+                <Tooltip title="Imprimer Fiche"><IconButton size="small" onClick={() => onPrint(user)}><PrintIcon /></IconButton></Tooltip>
+                <Tooltip title="Actions AD"><IconButton size="small" onClick={(e) => onOpenAdMenu(e, user)}><MoreVertIcon /></IconButton></Tooltip>
+                <Tooltip title="Supprimer (Excel)"><IconButton size="small" onClick={() => onDelete(user)}><DeleteIcon color="error" /></IconButton></Tooltip>
+            </Box>
+        </Box>
+    );
+});
 
 const UsersManagementPage = () => {
-    const { config, showNotification } = useApp();
+    const { showNotification } = useApp();
     const { fetchWithCache, invalidate } = useCache();
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [serverFilter, setServerFilter] = useState('all');
     const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -151,10 +177,9 @@ const UsersManagementPage = () => {
     const [userToPrint, setUserToPrint] = useState(null);
     const [vpnMembers, setVpnMembers] = useState(new Set());
     const [internetMembers, setInternetMembers] = useState(new Set());
-    const [adMenuAnchor, setAdMenuAnchor] = useState(null);
-    const [selectedUserForMenu, setSelectedUserForMenu] = useState(null);
-
-    const adGroupsConfig = useMemo(() => config?.ad_groups || {}, [config]);
+    const [adDialogOpen, setAdDialogOpen] = useState(false);
+    const [selectedUserForAd, setSelectedUserForAd] = useState(null);
+    const [updateAvailable, setUpdateAvailable] = useState(false);
 
     const { servers, departments } = useMemo(() => ({
         servers: [...new Set(users.map(u => u.server).filter(Boolean))].sort(),
@@ -163,39 +188,40 @@ const UsersManagementPage = () => {
 
     const loadGroupMembers = useCallback(async (force = false) => {
         try {
-            const [vpnResult, internetResult] = await Promise.all([
+            const [vpn, internet] = await Promise.all([
                 fetchWithCache('adGroup:VPN', () => window.electronAPI.getAdGroupMembers('VPN'), { force }),
                 fetchWithCache('adGroup:Sortants_responsables', () => window.electronAPI.getAdGroupMembers('Sortants_responsables'), { force })
             ]);
-            const vpnData = vpnResult.data || [];
-            const internetData = internetResult.data || [];
-            setVpnMembers(new Set(Array.isArray(vpnData) ? vpnData.map(m => m.SamAccountName) : []));
-            setInternetMembers(new Set(Array.isArray(internetData) ? internetData.map(m => m.SamAccountName) : []));
-        } catch (error) { showNotification('error', `Erreur chargement membres AD: ${error.message}`); }
-    }, [fetchWithCache, showNotification]);
+            setVpnMembers(new Set((vpn?.data || []).map(m => m.SamAccountName)));
+            setInternetMembers(new Set((internet?.data || []).map(m => m.SamAccountName)));
+        } catch (error) { console.warn('Erreur chargement groupes:', error.message); }
+    }, [fetchWithCache]);
 
     const loadUsers = useCallback(async (force = false) => {
-        const loadingState = force ? setIsRefreshing : setIsLoading;
-        loadingState(true);
+        if (!force) setIsLoading(true);
         try {
-            const { data: usersResult } = await fetchWithCache('users', () => window.electronAPI.syncExcelUsers(), { force });
-            if (usersResult.success) {
-                setUsers(Object.values(usersResult.users || {}).flat());
-                await loadGroupMembers(force);
-            } else { throw new Error(usersResult.error); }
-        } catch (error) { showNotification('error', `Erreur chargement: ${error.message}`); } 
-        finally { loadingState(false); }
-    }, [fetchWithCache, showNotification, loadGroupMembers]);
+            const { data } = await fetchWithCache('users', () => window.electronAPI.syncExcelUsers(), { force });
+            if (data?.success) setUsers(Object.values(data.users || {}).flat());
+        } catch (error) { showNotification('error', `Erreur chargement utilisateurs: ${error.message}`); } 
+        finally { if (!force) setIsLoading(false); }
+    }, [fetchWithCache, showNotification]);
 
-    useEffect(() => { loadUsers(); }, [loadUsers]);
+    useEffect(() => {
+        loadUsers();
+        loadGroupMembers();
+        const removeListener = window.electronAPI?.onDataUpdated(data => {
+            if (data.file?.includes('excel')) setUpdateAvailable(true);
+        });
+        return () => removeListener && removeListener();
+    }, [loadUsers, loadGroupMembers]);
 
     const filteredUsers = useMemo(() => {
-        let result = [...users];
+        let result = users;
         if (serverFilter !== 'all') result = result.filter(u => u.server === serverFilter);
         if (departmentFilter !== 'all') result = result.filter(u => u.department === departmentFilter);
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            result = result.filter(u => u.username?.toLowerCase().includes(term) || u.displayName?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term));
+            result = result.filter(u => Object.values(u).some(val => String(val).toLowerCase().includes(term)));
         }
         return result;
     }, [users, searchTerm, serverFilter, departmentFilter]);
@@ -205,21 +231,21 @@ const UsersManagementPage = () => {
     const handleSaveUser = async (userData) => {
         try {
             const result = await window.electronAPI.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
-            if (result.success) {
-                showNotification('success', 'Utilisateur sauvegardé dans Excel.');
+            if (result?.success) {
+                showNotification('success', 'Utilisateur sauvegardé.');
                 invalidate('users');
                 await loadUsers(true);
+                setUserDialogOpen(false);
             } else throw new Error(result.error);
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
-        setUserDialogOpen(false);
     };
 
     const handleDeleteUser = async (user) => {
-        if (!window.confirm(`Supprimer ${user.username} du fichier Excel ?`)) return;
+        if (!window.confirm(`Supprimer ${user.displayName} du fichier Excel ?`)) return;
         try {
             const result = await window.electronAPI.deleteUserFromExcel({ username: user.username });
-            if (result.success) {
-                showNotification('success', 'Utilisateur supprimé d\'Excel.');
+            if (result?.success) {
+                showNotification('success', 'Utilisateur supprimé.');
                 invalidate('users');
                 await loadUsers(true);
             } else throw new Error(result.error);
@@ -227,53 +253,75 @@ const UsersManagementPage = () => {
     };
 
     const handleConnectUser = (user) => {
-        if (!user.server) { showNotification('warning', 'Aucun serveur associé.'); return; }
+        if (!user.server) { showNotification('warning', 'Aucun serveur assigné.'); return; }
         window.electronAPI.connectWithStoredCredentials({ server: user.server, username: user.username, password: user.password });
-        showNotification('info', `Tentative de connexion à ${user.server}...`);
     };
 
-    const handlePrintUser = (user) => { setUserToPrint(user); setPrintPreviewOpen(true); };
-    const clearFilters = () => { setSearchTerm(''); setServerFilter('all'); setDepartmentFilter('all'); };
-
-    const handleOpenAdMenu = (event, user) => { setAdMenuAnchor(event.currentTarget); setSelectedUserForMenu(user); };
-    const handleCloseAdMenu = () => { setAdMenuAnchor(null); };
-    const handleAdActionComplete = (actionType) => { showNotification('success', `Action '${actionType}' terminée.`); handleCloseAdMenu(); loadUsers(true); };
-
-    const Row = useCallback(({ index, style }) => {
-        const user = filteredUsers[index];
-        if (!user) return null;
-        return <UserRow user={user} style={style} isOdd={index % 2 === 1} onEdit={(u) => { setSelectedUser(u); setUserDialogOpen(true); }} onDelete={handleDeleteUser} onConnect={handleConnectUser} onPrint={handlePrintUser} onOpenAdMenu={handleOpenAdMenu} adGroupsConfig={adGroupsConfig} vpnMembers={vpnMembers} internetMembers={internetMembers} onMembershipChange={() => loadGroupMembers(true)} />;
-    }, [filteredUsers, vpnMembers, internetMembers, adGroupsConfig, loadGroupMembers]);
+    const Row = useCallback(({ index, style }) => (
+        <UserRow
+            user={filteredUsers[index]} style={style} isOdd={index % 2 === 1}
+            onEdit={u => { setSelectedUser(u); setUserDialogOpen(true); }}
+            onDelete={handleDeleteUser} onConnect={handleConnectUser}
+            onPrint={u => { setUserToPrint(u); setPrintPreviewOpen(true); }}
+            onOpenAdMenu={(e, u) => { setSelectedUserForAd(u); setAdDialogOpen(true); }}
+            vpnMembers={vpnMembers} internetMembers={internetMembers}
+            onMembershipChange={() => { invalidate('adGroup:VPN'); invalidate('adGroup:Sortants_responsables'); loadGroupMembers(true); }}
+        />
+    ), [filteredUsers, vpnMembers, internetMembers, loadGroupMembers]);
 
     return (
         <Box sx={{ p: 2, height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
-            {isRefreshing && <LinearProgress />}
-            <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h5">Gestion des Utilisateurs</Typography>
+                    <Typography variant="h5" fontWeight="bold">Gestion des Utilisateurs</Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => { setSelectedUser(null); setUserDialogOpen(true); }}>Ajouter (Excel)</Button>
-                        <Tooltip title="Actualiser"><IconButton onClick={() => loadUsers(true)} disabled={isRefreshing}>{isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}</IconButton></Tooltip>
+                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => { setSelectedUser(null); setUserDialogOpen(true); }}>Ajouter</Button>
+                        <Tooltip title="Actualiser"><IconButton onClick={() => { invalidate('users'); loadUsers(true); loadGroupMembers(true); }}><RefreshIcon /></IconButton></Tooltip>
                     </Box>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <TextField size="small" placeholder="Rechercher..." onChange={(e) => debouncedSetSearch(e.target.value)} sx={{ minWidth: 300 }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
-                    <FormControl size="small" sx={{ minWidth: 180 }}><InputLabel>Serveur</InputLabel><Select value={serverFilter} label="Serveur" onChange={(e) => setServerFilter(e.target.value)}><MenuItem value="all">Tous</MenuItem>{servers.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl>
-                    <FormControl size="small" sx={{ minWidth: 180 }}><InputLabel>Service</InputLabel><Select value={departmentFilter} label="Service" onChange={(e) => setDepartmentFilter(e.target.value)}><MenuItem value="all">Tous</MenuItem>{departments.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}</Select></FormControl>
-                    {(searchTerm || serverFilter !== 'all' || departmentFilter !== 'all') && <Button size="small" startIcon={<ClearIcon />} onClick={clearFilters}>Effacer</Button>}
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 'auto' }}>{filteredUsers.length} / {users.length} affiché(s)</Typography>
+                <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={12} sm={4}><TextField fullWidth size="small" placeholder="Rechercher..." onChange={e => debouncedSetSearch(e.target.value)} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} /></Grid>
+                    <Grid item xs={6} sm={2}><FormControl fullWidth size="small"><InputLabel>Serveur</InputLabel><Select value={serverFilter} label="Serveur" onChange={e => setServerFilter(e.target.value)}><MenuItem value="all">Tous</MenuItem>{servers.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl></Grid>
+                    <Grid item xs={6} sm={2}><FormControl fullWidth size="small"><InputLabel>Service</InputLabel><Select value={departmentFilter} label="Service" onChange={e => setDepartmentFilter(e.target.value)}><MenuItem value="all">Tous</MenuItem>{departments.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}</Select></FormControl></Grid>
+                    <Grid item xs={12} sm={2}><Button fullWidth size="small" startIcon={<ClearIcon />} onClick={() => { setSearchTerm(''); setServerFilter('all'); setDepartmentFilter('all'); }}>Réinitialiser</Button></Grid>
+                    <Grid item xs={12} sm={2} sx={{ textAlign: 'right' }}><Typography variant="body2" color="text.secondary">{filteredUsers.length} / {users.length} affichés</Typography></Grid>
+                </Grid>
+            </Paper>
+
+            <Paper elevation={2} sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Box sx={{ px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', display: 'flex', gap: 2, fontWeight: 'bold' }}>
+                    <Box sx={{ flex: '1 1 150px' }}>Utilisateur</Box><Box sx={{ flex: '0.8 1 100px' }}>Service</Box><Box sx={{ flex: '1.2 1 180px' }}>Email</Box><Box sx={{ flex: '1 1 160px' }}>Mots de passe</Box><Box sx={{ flex: '1 1 120px' }}>Groupes</Box><Box sx={{ flex: '0 0 auto' }}>Actions</Box>
+                </Box>
+                <Box sx={{ flex: 1, overflow: 'auto' }}>
+                    {isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box> :
+                     !filteredUsers.length ? <Typography sx={{ p: 4, textAlign: 'center' }}>Aucun utilisateur trouvé.</Typography> :
+                     <AutoSizer>{({ height, width }) => <List height={height} width={width} itemCount={filteredUsers.length} itemSize={70} itemKey={i => filteredUsers[i].username}>{Row}</List>}</AutoSizer>}
                 </Box>
             </Paper>
-            <Paper elevation={3} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <TableHeader />
-                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-                    {isLoading ? <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box> : 
-                    <AutoSizer>{({ height, width }) => (<List height={height} itemCount={filteredUsers.length} itemSize={85} width={width} overscanCount={10} itemKey={index => filteredUsers[index].username}>{Row}</List>)}</AutoSizer>}
-                </Box>
-            </Paper>
+
             {userDialogOpen && <UserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} user={selectedUser} onSave={handleSaveUser} servers={servers} />}
             {printPreviewOpen && <PrintPreviewDialog open={printPreviewOpen} onClose={() => setPrintPreviewOpen(false)} user={userToPrint} />}
-            {selectedUserForMenu && <UserAdActionsMenu anchorEl={adMenuAnchor} onClose={handleCloseAdMenu} user={selectedUserForMenu} onActionComplete={handleAdActionComplete} />}
+            
+            {selectedUserForAd && (
+                <AdActionsDialog
+                    open={adDialogOpen}
+                    onClose={() => setAdDialogOpen(false)}
+                    user={selectedUserForAd}
+                    onActionComplete={() => {
+                        invalidate('users');
+                        invalidate('adGroup:VPN');
+                        invalidate('adGroup:Sortants_responsables');
+                        loadUsers(true);
+                        loadGroupMembers(true);
+                    }}
+                />
+            )}
+
+            <Snackbar open={updateAvailable} autoHideDuration={10000} onClose={() => setUpdateAvailable(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
+                <Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { loadUsers(true); setUpdateAvailable(false); }}>Recharger</Button>}>
+                    La liste des utilisateurs a été mise à jour.
+                </Alert>
+            </Snackbar>
         </Box>
     );
 };

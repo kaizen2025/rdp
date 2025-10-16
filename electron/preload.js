@@ -1,4 +1,4 @@
-// electron/preload.js - VERSION FINALE CORRIGÉE
+// electron/preload.js - COMPLET ET CORRIGÉ
 
 const { contextBridge, ipcRenderer } = require('electron');
 
@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLoanHistory: (filters) => ipcRenderer.invoke('get-loan-history', filters),
     getLoanStatistics: () => ipcRenderer.invoke('get-loan-statistics'),
 
-    // --- CORRECTION : AJOUT DES FONCTIONS ACCESSOIRES MANQUANTES ---
+    // --- ACCESSOIRES ---
     getAccessories: () => ipcRenderer.invoke('get-accessories'),
     saveAccessory: (accessory) => ipcRenderer.invoke('save-accessory', accessory),
     deleteAccessory: (id) => ipcRenderer.invoke('delete-accessory', id),
@@ -71,7 +71,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // --- HISTORIQUE & FAVORIS ---
     getHistory: () => ipcRenderer.invoke('get-history'),
     saveHistory: (data) => ipcRenderer.invoke('save-history', data),
-    
+    getFavorites: () => ipcRenderer.invoke('get-favorites'),
+    saveFavorites: (data) => ipcRenderer.invoke('save-favorites', data),
+
     // --- CHAT ---
     'chat:getChannels': () => ipcRenderer.invoke('chat:getChannels'),
     'chat:addChannel': (name, description) => ipcRenderer.invoke('chat:addChannel', name, description),
@@ -89,6 +91,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pingServer: (server) => ipcRenderer.invoke('ping-server', server),
     showNotification: (title, message) => ipcRenderer.invoke('show-notification', title, message),
     showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
+    openPath: (path) => ipcRenderer.invoke('open-path', path),
 
     // --- ÉCOUTEUR TEMPS RÉEL ---
     onDataUpdated: (callback) => {
@@ -97,3 +100,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('data-updated', listener);
     },
 });
+
+console.log('✅ Preload script chargé.');
