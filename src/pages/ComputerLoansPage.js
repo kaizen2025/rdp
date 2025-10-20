@@ -1,4 +1,4 @@
-// src/pages/ComputerLoansPage.js - VERSION FINALE, COMPLÈTE ET RÉORGANISÉE
+// src/pages/ComputerLoansPage.js - VERSION CORRIGÉE ET ADAPTÉE
 
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import Box from '@mui/material/Box';
@@ -10,11 +10,13 @@ import Badge from '@mui/material/Badge';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import CircularProgress from '@mui/material/CircularProgress';
-
-import { useApp } from '../contexts/AppContext';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { fr } from 'date-fns/locale';
+
+// Import des services et contextes
+import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService';
 
 // Icons
 import LaptopIcon from '@mui/icons-material/Laptop';
@@ -27,7 +29,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import HistoryIcon from '@mui/icons-material/History';
 import ComputerIcon from '@mui/icons-material/Computer';
 
-// Lazy load des "sous-pages" et dialogues
+// Lazy load des "sous-pages" et dialogues (CORRIGÉ)
 const LoanList = lazy(() => import('../components/loan-management/LoanList'));
 const ComputerList = lazy(() => import('../components/loan-management/ComputerList'));
 const LoansCalendar = lazy(() => import('../pages/LoansCalendar'));
@@ -42,7 +44,6 @@ const LoadingFallback = () => (
     </Box>
 );
 
-// --- NOUVEAU COMPOSANT POUR L'ONGLET HISTORIQUE UNIFIÉ ---
 const HistoryTab = ({ refreshKey }) => {
     const [subTab, setSubTab] = useState(0);
     return (
@@ -62,37 +63,38 @@ const HistoryTab = ({ refreshKey }) => {
 };
 
 const ComputerLoansPage = () => {
-    const { showNotification } = useApp();
+    const { showNotification, events } = useApp();
     const [currentTab, setCurrentTab] = useState(0);
     const [refreshKey, setRefreshKey] = useState(0);
-    const [notifications, setNotifications] = useState([]);
+    const [unreadNotifs, setUnreadNotifs] = useState(0);
     const [statisticsDialogOpen, setStatisticsDialogOpen] = useState(false);
     const [notificationsPanelOpen, setNotificationsPanelOpen] = useState(false);
 
-    const loadNotifications = useCallback(async () => {
+    const handleForceRefresh = useCallback(() => {
+        setRefreshKey(prevKey => prevKey + 1);
+        showNotification('info', 'Rafraîchissement des données en cours...');
+    }, [showNotification]);
+
+    const loadUnreadCount = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getUnreadNotifications();
-            setNotifications(data || []);
+            const data = await apiService.getUnreadNotifications();
+            setUnreadNotifs(data.length || 0);
         } catch (error) { console.error('Erreur chargement notifications:', error); }
     }, []);
 
     useEffect(() => {
-        loadNotifications();
-        const removeListener = window.electronAPI.onDataUpdated((data) => {
-            if (data.file === 'loans.json' || data.file === 'computers_stock.json' || data.file === 'accessories_config.json') {
-                setRefreshKey(prevKey => prevKey + 1);
+        loadUnreadCount();
+        // S'abonner aux événements WebSocket
+        const unsubscribe = events.on('data_updated', (payload) => {
+            if (payload.entity === 'loans' || payload.entity === 'computers' || payload.entity === 'accessories') {
+                handleForceRefresh();
             }
-            if (data.file === 'loan_notifications.json') {
-                loadNotifications();
+            if (payload.entity === 'notifications') {
+                loadUnreadCount();
             }
         });
-        return () => { if (removeListener) removeListener(); };
-    }, [loadNotifications]);
-
-    const handleForceRefresh = () => {
-        setRefreshKey(prevKey => prevKey + 1);
-        showNotification('info', 'Rafraîchissement des données en cours...');
-    };
+        return unsubscribe; // Nettoyage de l'abonnement
+    }, [events, handleForceRefresh, loadUnreadCount]);
 
     return (
         <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
@@ -102,7 +104,7 @@ const ComputerLoansPage = () => {
                         <Typography variant="h5">Gestion des Prêts</Typography>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <Tooltip title="Statistiques"><IconButton onClick={() => setStatisticsDialogOpen(true)}><BarChartIcon /></IconButton></Tooltip>
-                            <Tooltip title="Notifications"><IconButton onClick={() => setNotificationsPanelOpen(true)}><Badge badgeContent={notifications.length} color="error"><NotificationsIcon /></Badge></IconButton></Tooltip>
+                            <Tooltip title="Notifications"><IconButton onClick={() => setNotificationsPanelOpen(true)}><Badge badgeContent={unreadNotifs} color="error"><NotificationsIcon /></Badge></IconButton></Tooltip>
                             <Tooltip title="Actualiser les données"><IconButton onClick={handleForceRefresh}><RefreshIcon /></IconButton></Tooltip>
                         </Box>
                     </Box>
@@ -126,7 +128,7 @@ const ComputerLoansPage = () => {
 
                 <Suspense fallback={<div />}>
                     {statisticsDialogOpen && <LoanStatisticsDialog open={statisticsDialogOpen} onClose={() => setStatisticsDialogOpen(false)} />}
-                    {notificationsPanelOpen && <LoanNotificationsPanel open={notificationsPanelOpen} onClose={() => setNotificationsPanelOpen(false)} onNotificationClick={loadNotifications} />}
+                    {notificationsPanelOpen && <LoanNotificationsPanel open={notificationsPanelOpen} onClose={() => setNotificationsPanelOpen(false)} onNotificationClick={loadUnreadCount} />}
                 </Suspense>
             </Box>
         </LocalizationProvider>

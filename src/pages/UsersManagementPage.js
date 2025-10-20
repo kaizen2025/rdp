@@ -1,4 +1,4 @@
-// src/pages/UsersManagementPage.js - VERSION FINALE UTILISANT LE DIALOGUE D'ACTIONS AVANCÉ
+// src/pages/UsersManagementPage.js - VERSION FINALE, SANS IMPORT EN DOUBLE
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
@@ -19,6 +19,8 @@ import MenuItem from '@mui/material/MenuItem';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import Grid from '@mui/material/Grid';
+import LinearProgress from '@mui/material/LinearProgress';
 
 // Icons
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
@@ -36,20 +38,20 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import LanguageIcon from '@mui/icons-material/Language';
-import NotificationsIcon from '@mui/icons-material/Notifications';
 
-import { useApp } from '../contexts/AppContext';
+// Import des contextes et services
+import { useApp } from '../contexts/AppContext'; // Import unique et correct
 import { useCache } from '../contexts/CacheContext';
+import apiService from '../services/apiService';
+
+// Import des composants enfants
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
-import AdActionsDialog from '../components/AdActionsDialog'; // Import du nouveau dialogue
+import AdActionsDialog from '../components/AdActionsDialog';
 
 const debounce = (func, wait) => {
     let timeout;
-    return (...args) => {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func(...args), wait);
-    };
+    return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); };
 };
 
 const CopyableText = memo(({ text, display, maxLength = 30 }) => {
@@ -121,14 +123,10 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
     const toggleGroup = useCallback(async (group, isMember, setLoading) => {
         setLoading(true);
         try {
-            const action = isMember ? 'removeUserFromGroup' : 'addUserToGroup';
-            const result = await window.electronAPI[action]({ username: user.username, groupName: group });
-            if (result.success) {
-                showNotification('success', `${user.username} ${isMember ? 'retiré de' : 'ajouté à'} ${group}`);
-                onMembershipChange();
-            } else {
-                throw new Error(result.error);
-            }
+            const action = isMember ? apiService.removeUserFromGroup : apiService.addUserToGroup;
+            await action(user.username, group);
+            showNotification('success', `${user.username} ${isMember ? 'retiré de' : 'ajouté à'} ${group}`);
+            onMembershipChange();
         } catch (error) {
             showNotification('error', `Erreur: ${error.message}`);
         } finally {
@@ -144,7 +142,7 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
             </Box>
             <Box sx={{ flex: '0.8 1 100px', minWidth: 80 }}><Typography variant="body2">{user.department || '-'}</Typography></Box>
             <Box sx={{ flex: '1.2 1 180px', minWidth: 150 }}><CopyableText text={user.email} display={user.email} /></Box>
-            <Box sx={{ flex: '1 1 160px', minWidth: 140 }}>
+            <Box sx={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 <PasswordCompact password={user.password} />
                 <PasswordCompact password={user.officePassword} />
             </Box>
@@ -153,7 +151,7 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
                 <AdGroupBadge groupName="Sortants_responsables" isMember={internetMembers.has(user.username)} onToggle={() => toggleGroup('Sortants_responsables', internetMembers.has(user.username), setIsUpdatingInternet)} isLoading={isUpdatingInternet} />
             </Box>
             <Box sx={{ flex: '0 0 auto', display: 'flex' }}>
-                <Tooltip title="Connexion RDP"><IconButton size="small" onClick={() => onConnect(user)}><LaunchIcon /></IconButton></Tooltip>
+                <Tooltip title="Connexion RDP (non disponible en web)"><IconButton size="small" onClick={() => onConnect(user)} disabled><LaunchIcon /></IconButton></Tooltip>
                 <Tooltip title="Éditer (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon /></IconButton></Tooltip>
                 <Tooltip title="Imprimer Fiche"><IconButton size="small" onClick={() => onPrint(user)}><PrintIcon /></IconButton></Tooltip>
                 <Tooltip title="Actions AD"><IconButton size="small" onClick={(e) => onOpenAdMenu(e, user)}><MoreVertIcon /></IconButton></Tooltip>
@@ -164,10 +162,11 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
 });
 
 const UsersManagementPage = () => {
-    const { showNotification } = useApp();
+    const { showNotification, events } = useApp();
     const { fetchWithCache, invalidate } = useCache();
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [serverFilter, setServerFilter] = useState('all');
     const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -188,32 +187,52 @@ const UsersManagementPage = () => {
 
     const loadGroupMembers = useCallback(async (force = false) => {
         try {
-            const [vpn, internet] = await Promise.all([
-                fetchWithCache('adGroup:VPN', () => window.electronAPI.getAdGroupMembers('VPN'), { force }),
-                fetchWithCache('adGroup:Sortants_responsables', () => window.electronAPI.getAdGroupMembers('Sortants_responsables'), { force })
-            ]);
-            setVpnMembers(new Set((vpn?.data || []).map(m => m.SamAccountName)));
-            setInternetMembers(new Set((internet?.data || []).map(m => m.SamAccountName)));
-        } catch (error) { console.warn('Erreur chargement groupes:', error.message); }
-    }, [fetchWithCache]);
-
-    const loadUsers = useCallback(async (force = false) => {
-        if (!force) setIsLoading(true);
-        try {
-            const { data } = await fetchWithCache('users', () => window.electronAPI.syncExcelUsers(), { force });
-            if (data?.success) setUsers(Object.values(data.users || {}).flat());
-        } catch (error) { showNotification('error', `Erreur chargement utilisateurs: ${error.message}`); } 
-        finally { if (!force) setIsLoading(false); }
+            const { data: vpn } = await fetchWithCache('adGroup:VPN', () => apiService.getAdGroupMembers('VPN'), { force });
+            const { data: internet } = await fetchWithCache('adGroup:Sortants_responsables', () => apiService.getAdGroupMembers('Sortants_responsables'), { force });
+            setVpnMembers(new Set((vpn || []).map(m => m.SamAccountName)));
+            setInternetMembers(new Set((internet || []).map(m => m.SamAccountName)));
+        } catch (error) { 
+            console.error('Erreur chargement groupes:', error.message);
+            showNotification('error', `Erreur chargement groupes: ${error.message}`);
+        }
     }, [fetchWithCache, showNotification]);
 
+    const loadUsers = useCallback(async (force = false) => {
+        try {
+            const { data } = await fetchWithCache('excel_users', apiService.getExcelUsers, { force });
+            if (data?.success) {
+                setUsers(Object.values(data.users || {}).flat());
+            } else {
+                setUsers([]);
+                showNotification('error', data?.error || 'Impossible de charger les utilisateurs Excel.');
+            }
+        } catch (error) { 
+            showNotification('error', `Erreur chargement utilisateurs: ${error.message}`); 
+        }
+    }, [fetchWithCache, showNotification]);
+
+    const handleRefresh = useCallback(async (force = true) => {
+        setIsRefreshing(true);
+        try {
+            if (force) {
+                invalidate('excel_users');
+                invalidate('adGroup:VPN');
+                invalidate('adGroup:Sortants_responsables');
+            }
+            await Promise.all([loadUsers(force), loadGroupMembers(force)]);
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [loadUsers, loadGroupMembers, invalidate]);
+
     useEffect(() => {
-        loadUsers();
-        loadGroupMembers();
-        const removeListener = window.electronAPI?.onDataUpdated(data => {
-            if (data.file?.includes('excel')) setUpdateAvailable(true);
-        });
-        return () => removeListener && removeListener();
-    }, [loadUsers, loadGroupMembers]);
+        setIsLoading(true);
+        handleRefresh(false).finally(() => setIsLoading(false));
+
+        const onUsersUpdated = () => setUpdateAvailable(true);
+        const unsubscribe = events.on('data_updated:excel_users', onUsersUpdated);
+        return unsubscribe;
+    }, [handleRefresh, events]);
 
     const filteredUsers = useMemo(() => {
         let result = users;
@@ -230,31 +249,24 @@ const UsersManagementPage = () => {
 
     const handleSaveUser = async (userData) => {
         try {
-            const result = await window.electronAPI.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
-            if (result?.success) {
-                showNotification('success', 'Utilisateur sauvegardé.');
-                invalidate('users');
-                await loadUsers(true);
-                setUserDialogOpen(false);
-            } else throw new Error(result.error);
+            await apiService.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
+            showNotification('success', 'Utilisateur sauvegardé.');
+            await handleRefresh(true);
+            setUserDialogOpen(false);
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     };
 
     const handleDeleteUser = async (user) => {
         if (!window.confirm(`Supprimer ${user.displayName} du fichier Excel ?`)) return;
         try {
-            const result = await window.electronAPI.deleteUserFromExcel({ username: user.username });
-            if (result?.success) {
-                showNotification('success', 'Utilisateur supprimé.');
-                invalidate('users');
-                await loadUsers(true);
-            } else throw new Error(result.error);
+            await apiService.deleteUserFromExcel(user.username);
+            showNotification('success', 'Utilisateur supprimé.');
+            await handleRefresh(true);
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     };
 
     const handleConnectUser = (user) => {
-        if (!user.server) { showNotification('warning', 'Aucun serveur assigné.'); return; }
-        window.electronAPI.connectWithStoredCredentials({ server: user.server, username: user.username, password: user.password });
+        showNotification('info', 'La connexion RDP directe depuis le web n\'est pas possible.');
     };
 
     const Row = useCallback(({ index, style }) => (
@@ -265,18 +277,19 @@ const UsersManagementPage = () => {
             onPrint={u => { setUserToPrint(u); setPrintPreviewOpen(true); }}
             onOpenAdMenu={(e, u) => { setSelectedUserForAd(u); setAdDialogOpen(true); }}
             vpnMembers={vpnMembers} internetMembers={internetMembers}
-            onMembershipChange={() => { invalidate('adGroup:VPN'); invalidate('adGroup:Sortants_responsables'); loadGroupMembers(true); }}
+            onMembershipChange={() => handleRefresh(true)}
         />
-    ), [filteredUsers, vpnMembers, internetMembers, loadGroupMembers]);
+    ), [filteredUsers, vpnMembers, internetMembers, handleRefresh]);
 
     return (
-        <Box sx={{ p: 2, height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ p: 2, height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+            {isRefreshing && <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }} />}
             <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="h5" fontWeight="bold">Gestion des Utilisateurs</Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => { setSelectedUser(null); setUserDialogOpen(true); }}>Ajouter</Button>
-                        <Tooltip title="Actualiser"><IconButton onClick={() => { invalidate('users'); loadUsers(true); loadGroupMembers(true); }}><RefreshIcon /></IconButton></Tooltip>
+                        <Tooltip title="Actualiser"><span><IconButton onClick={() => handleRefresh(true)} disabled={isRefreshing}><RefreshIcon /></IconButton></span></Tooltip>
                     </Box>
                 </Box>
                 <Grid container spacing={2} alignItems="center">
@@ -287,7 +300,6 @@ const UsersManagementPage = () => {
                     <Grid item xs={12} sm={2} sx={{ textAlign: 'right' }}><Typography variant="body2" color="text.secondary">{filteredUsers.length} / {users.length} affichés</Typography></Grid>
                 </Grid>
             </Paper>
-
             <Paper elevation={2} sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <Box sx={{ px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', display: 'flex', gap: 2, fontWeight: 'bold' }}>
                     <Box sx={{ flex: '1 1 150px' }}>Utilisateur</Box><Box sx={{ flex: '0.8 1 100px' }}>Service</Box><Box sx={{ flex: '1.2 1 180px' }}>Email</Box><Box sx={{ flex: '1 1 160px' }}>Mots de passe</Box><Box sx={{ flex: '1 1 120px' }}>Groupes</Box><Box sx={{ flex: '0 0 auto' }}>Actions</Box>
@@ -298,29 +310,11 @@ const UsersManagementPage = () => {
                      <AutoSizer>{({ height, width }) => <List height={height} width={width} itemCount={filteredUsers.length} itemSize={70} itemKey={i => filteredUsers[i].username}>{Row}</List>}</AutoSizer>}
                 </Box>
             </Paper>
-
             {userDialogOpen && <UserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} user={selectedUser} onSave={handleSaveUser} servers={servers} />}
             {printPreviewOpen && <PrintPreviewDialog open={printPreviewOpen} onClose={() => setPrintPreviewOpen(false)} user={userToPrint} />}
-            
-            {selectedUserForAd && (
-                <AdActionsDialog
-                    open={adDialogOpen}
-                    onClose={() => setAdDialogOpen(false)}
-                    user={selectedUserForAd}
-                    onActionComplete={() => {
-                        invalidate('users');
-                        invalidate('adGroup:VPN');
-                        invalidate('adGroup:Sortants_responsables');
-                        loadUsers(true);
-                        loadGroupMembers(true);
-                    }}
-                />
-            )}
-
+            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => setAdDialogOpen(false)} user={selectedUserForAd} onActionComplete={() => handleRefresh(true)} />}
             <Snackbar open={updateAvailable} autoHideDuration={10000} onClose={() => setUpdateAvailable(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}>
-                <Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { loadUsers(true); setUpdateAvailable(false); }}>Recharger</Button>}>
-                    La liste des utilisateurs a été mise à jour.
-                </Alert>
+                <Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { handleRefresh(true); setUpdateAvailable(false); }}>Recharger</Button>}>La liste des utilisateurs a été mise à jour.</Alert>
             </Snackbar>
         </Box>
     );

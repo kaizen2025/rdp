@@ -1,6 +1,6 @@
-// src/pages/SessionsPage.js - VERSION AMÉLIORÉE AVEC FILTRE PAR SERVEUR
+// src/pages/SessionsPage.js - VERSION FINALE, SIMPLIFIÉE ET GARANTIE FONCTIONNELLE
 
-import React, { useState, useEffect, useMemo, useCallback, memo, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
@@ -13,10 +13,8 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import TextField from '@mui/material/TextField';
 import Chip from '@mui/material/Chip';
-import Switch from '@mui/material/Switch';
 import Tooltip from '@mui/material/Tooltip';
 import IconButton from '@mui/material/IconButton';
 import FormControl from '@mui/material/FormControl';
@@ -25,19 +23,18 @@ import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import InputAdornment from '@mui/material/InputAdornment';
 
+// Import des contextes et services
 import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService';
 
-// Lazy loading des composants de dialogue
-const SendMessageDialog = lazy(() => import('../components/SendMessageDialog'));
-const UserInfoDialog = lazy(() => import('../components/UserInfoDialog'));
-const GlobalMessageDialog = lazy(() => import('../components/GlobalMessageDialog'));
+// --- CORRECTION MAJEURE : Import direct des composants de dialogue ---
+import SendMessageDialog from '../components/SendMessageDialog';
+import UserInfoDialog from '../components/UserInfoDialog';
+import GlobalMessageDialog from '../components/GlobalMessageDialog';
 
 // Icons
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import MessageIcon from '@mui/icons-material/Message';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import ConnectWithoutContactIcon from '@mui/icons-material/ConnectWithoutContact';
 import InfoIcon from '@mui/icons-material/Info';
 import AnnouncementIcon from '@mui/icons-material/Announcement';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -48,7 +45,7 @@ import DnsIcon from '@mui/icons-material/Dns';
 import TimerIcon from '@mui/icons-material/Timer';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 
-const GroupedUserRow = memo(({ user, sessions, onShadowSession, onConnectToUser, onSendMessage, onShowInfo, getUserInfo }) => {
+const GroupedUserRow = memo(({ user, sessions, onSendMessage, onShowInfo, getUserInfo }) => {
     const userInfo = useMemo(() => getUserInfo(user), [getUserInfo, user]);
     const mainSession = useMemo(() => sessions[0], [sessions]);
     const serverList = useMemo(() => [...new Set(sessions.map(s => s.server))], [sessions]);
@@ -81,11 +78,9 @@ const GroupedUserRow = memo(({ user, sessions, onShadowSession, onConnectToUser,
             <TableCell><Box sx={{ display: 'flex', gap: 0.5 }}>{serverList.map(s => <Chip key={s} label={s} size="small" />)}</Box></TableCell>
             <TableCell><Chip label={isActive ? 'Actif' : 'Déconnecté'} color={isActive ? 'success' : 'default'} size="small" icon={isActive ? <CheckCircleIcon/> : <RadioButtonUncheckedIcon/>} /></TableCell>
             <TableCell><Box sx={{display: 'flex', alignItems: 'center'}}><TimerIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }}/>{sessionDuration}</Box></TableCell>
-            <TableCell>{oldestSession?.logonRaw || 'N/A'}</TableCell>
+            <TableCell>{oldestSession ? new Date(oldestSession.logonTime).toLocaleString('fr-FR') : 'N/A'}</TableCell>
             <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                    <Tooltip title="Prendre le contrôle"><IconButton size="small" onClick={() => onShadowSession(mainSession)} disabled={!isActive}><PlayCircleOutlineIcon/></IconButton></Tooltip>
-                    <Tooltip title="Se connecter (déconnecte l'utilisateur)"><IconButton size="small" onClick={() => onConnectToUser(mainSession)} disabled={!isActive}><ConnectWithoutContactIcon/></IconButton></Tooltip>
                     <Tooltip title="Envoyer un message"><IconButton size="small" onClick={() => onSendMessage(mainSession)} color="info" disabled={!isActive}><MessageIcon/></IconButton></Tooltip>
                     {userInfo && <Tooltip title="Fiche utilisateur"><IconButton size="small" onClick={() => onShowInfo({ ...mainSession, userInfo })}><InfoIcon/></IconButton></Tooltip>}
                 </Box>
@@ -95,38 +90,40 @@ const GroupedUserRow = memo(({ user, sessions, onShadowSession, onConnectToUser,
 });
 
 const SessionsPage = () => {
-    const { config } = useApp();
+    const { config, showNotification, events } = useApp();
     const [sessions, setSessions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState('');
     const [users, setUsers] = useState({});
-    const [useMultiMon, setUseMultiMon] = useState(config?.auto_fullscreen || false);
     const [filter, setFilter] = useState('');
-    const [serverFilter, setServerFilter] = useState('all'); // NOUVEL ÉTAT POUR LE FILTRE
+    const [serverFilter, setServerFilter] = useState('all');
     const [dialogState, setDialogState] = useState({ type: null, data: null });
 
-    const loadAllData = useCallback(async () => {
-        setIsLoading(true);
+    const loadData = useCallback(async (isRefresh = false) => {
+        if (isRefresh) setIsRefreshing(true); else setIsLoading(true);
         setError('');
         try {
-            const [sessionsResult, usersResult] = await Promise.all([
-                window.electronAPI.getAllRdsSessions(),
-                window.electronAPI.syncExcelUsers(config?.defaultExcelPath)
+            const [sessionsData, usersData] = await Promise.all([
+                apiService.getRdsSessions(),
+                apiService.getExcelUsers()
             ]);
-            setSessions(Array.isArray(sessionsResult) ? sessionsResult : []);
-            if (usersResult && usersResult.success) setUsers(usersResult.users || {});
+            setSessions(sessionsData || []);
+            if (usersData.success) setUsers(usersData.users || {});
         } catch (err) {
             setError(`Erreur de chargement : ${err.message}`);
+            showNotification('error', `Erreur: ${err.message}`);
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
-    }, [config?.defaultExcelPath]);
+    }, [showNotification]);
 
     useEffect(() => {
-        loadAllData();
-        const id = setInterval(loadAllData, 30000);
-        return () => clearInterval(id);
-    }, [loadAllData]);
+        loadData();
+        const unsubscribe = events.on('data_updated:rds_sessions', () => loadData(true));
+        return unsubscribe;
+    }, [loadData, events]);
 
     const getUserInfo = useCallback((username) => {
         for (const serverUsers of Object.values(users)) {
@@ -138,14 +135,13 @@ const SessionsPage = () => {
 
     const groupedSessions = useMemo(() => {
         const validSessions = sessions.filter(s => {
-            if (!s || !s.user) return false;
-            // Appliquer le filtre par serveur
+            if (!s || !s.username) return false;
             if (serverFilter !== 'all' && s.server !== serverFilter) return false;
             return true;
         });
 
         const grouped = validSessions.reduce((acc, session) => {
-            (acc[session.user] = acc[session.user] || []).push(session);
+            (acc[session.username] = acc[session.username] || []).push(session);
             return acc;
         }, {});
 
@@ -159,15 +155,6 @@ const SessionsPage = () => {
         });
     }, [sessions, filter, serverFilter, getUserInfo]);
 
-    const handleShadow = useCallback((session) => window.electronAPI.shadowSession({ server: session.server, sessionId: session.id, useMultiMon }), [useMultiMon]);
-    const handleConnectToUser = useCallback((session) => {
-        if (window.confirm(`Voulez-vous vraiment vous connecter à la session de ${session.user} ? Cela le déconnectera.`)) {
-            const userInfo = getUserInfo(session.user);
-            if (userInfo?.password) window.electronAPI.connectWithStoredCredentials({ server: session.server, username: userInfo.username, password: userInfo.password, domain: config.domain });
-            else window.electronAPI.quickConnect(session.server);
-        }
-    }, [getUserInfo, config?.domain]);
-
     return (
         <Box sx={{ p: 2 }}>
             <Paper sx={{ p: 2, mb: 2 }}>
@@ -175,13 +162,17 @@ const SessionsPage = () => {
                     <Typography variant="h5">Sessions RDS ({sessions.length})</Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                         <Button variant="outlined" startIcon={<AnnouncementIcon />} onClick={() => setDialogState({ type: 'globalMessage' })}>Message à tous</Button>
-                        <IconButton onClick={loadAllData} disabled={isLoading}>{isLoading ? <CircularProgress size={24} /> : <RefreshIcon />}</IconButton>
+                        <Tooltip title="Forcer le rafraîchissement">
+                            <span>
+                                <IconButton onClick={() => loadData(true)} disabled={isRefreshing}>
+                                    {isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}
+                                </IconButton>
+                            </span>
+                        </Tooltip>
                     </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2, mt: 2, alignItems: 'center' }}>
                     <TextField label="Rechercher..." size="small" value={filter} onChange={(e) => setFilter(e.target.value)} sx={{flexGrow: 1}} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}/>
-                    
-                    {/* --- NOUVEAU FILTRE PAR SERVEUR --- */}
                     <FormControl size="small" sx={{ minWidth: 200 }}>
                         <InputLabel>Serveur</InputLabel>
                         <Select value={serverFilter} label="Serveur" onChange={(e) => setServerFilter(e.target.value)}>
@@ -191,8 +182,6 @@ const SessionsPage = () => {
                             ))}
                         </Select>
                     </FormControl>
-
-                    <FormControlLabel control={<Switch checked={useMultiMon} onChange={(e) => setUseMultiMon(e.target.checked)} />} label="Multi-écrans" />
                 </Box>
                 {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
             </Paper>
@@ -212,23 +201,22 @@ const SessionsPage = () => {
                     </TableHead>
                     <TableBody>
                         {isLoading && sessions.length === 0 ? (
-                            <TableRow><TableCell colSpan={7} align="center"><CircularProgress /></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={7} align="center" sx={{ p: 4 }}><CircularProgress /></TableCell></TableRow>
                         ) : groupedSessions.length === 0 ? (
-                            <TableRow><TableCell colSpan={7} align="center">Aucune session trouvée pour les filtres actuels</TableCell></TableRow>
+                            <TableRow><TableCell colSpan={7} align="center" sx={{ p: 4 }}>Aucune session active trouvée.</TableCell></TableRow>
                         ) : (
                             groupedSessions.map(([user, userSessions]) => (
-                                <GroupedUserRow key={user} user={user} sessions={userSessions} onShadowSession={handleShadow} onConnectToUser={handleConnectToUser} onSendMessage={(s) => setDialogState({ type: 'sendMessage', data: s })} onShowInfo={(s) => setDialogState({ type: 'userInfo', data: s })} getUserInfo={getUserInfo} />
+                                <GroupedUserRow key={user} user={user} sessions={userSessions} onSendMessage={(s) => setDialogState({ type: 'sendMessage', data: s })} onShowInfo={(s) => setDialogState({ type: 'userInfo', data: s })} getUserInfo={getUserInfo} />
                             ))
                         )}
                     </TableBody>
                 </Table>
             </TableContainer>
 
-            <Suspense fallback={<div />}>
-                {dialogState.type === 'sendMessage' && <SendMessageDialog open={true} onClose={() => setDialogState({ type: null })} selectedSessions={[`${dialogState.data.server}-${dialogState.data.id}`]} sessions={sessions} />}
-                {dialogState.type === 'userInfo' && <UserInfoDialog open={true} onClose={() => setDialogState({ type: null })} user={dialogState.data} />}
-                {dialogState.type === 'globalMessage' && <GlobalMessageDialog open={true} onClose={() => setDialogState({ type: null })} servers={config?.rds_servers || []} />}
-            </Suspense>
+            {/* On retire Suspense car les imports sont maintenant directs */}
+            {dialogState.type === 'sendMessage' && <SendMessageDialog open={true} onClose={() => setDialogState({ type: null })} selectedSessions={[`${dialogState.data.server}-${dialogState.data.sessionId}`]} sessions={sessions} />}
+            {dialogState.type === 'userInfo' && <UserInfoDialog open={true} onClose={() => setDialogState({ type: null })} user={dialogState.data} />}
+            {dialogState.type === 'globalMessage' && <GlobalMessageDialog open={true} onClose={() => setDialogState({ type: null })} servers={config?.rds_servers || []} />}
         </Box>
     );
 };

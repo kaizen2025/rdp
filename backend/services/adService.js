@@ -125,6 +125,25 @@ async function getAdGroupMembers(groupName) {
     }
 }
 
+async function getAvailableAdGroups() {
+    const psScript = `
+        try {
+            Import-Module ActiveDirectory -ErrorAction Stop
+            Get-ADGroup -Filter 'GroupCategory -eq "Security"' | Select-Object Name | ConvertTo-Json -Compress
+        } catch {
+            '[]'
+        }
+    `;
+    try {
+        const jsonOutput = await executeEncodedPowerShell(psScript, 20000);
+        const groups = JSON.parse(jsonOutput || '[]');
+        return Array.isArray(groups) ? groups.map(g => g.Name) : [groups.Name];
+    } catch (e) {
+        console.error('Erreur récupération des groupes AD:', parseAdError(e.message));
+        return [];
+    }
+}
+
 // === GESTION DES GROUPES ===
 
 async function addUserToGroup(args) {
@@ -357,18 +376,27 @@ async function getAdUserDetails(username) {
     const psScript = `
         try {
             Import-Module ActiveDirectory -ErrorAction Stop
+            
             $user = Get-ADUser -Identity "${username}" -Properties * -ErrorAction Stop
             $groups = Get-ADPrincipalGroupMembership -Identity $user | Select-Object -ExpandProperty Name
-            @{
+            
+            # Formater les dates en ISO 8601 pour une compatibilité parfaite avec JavaScript
+            $result = @{
                 success = $true
                 user = @{
-                    username = $user.SamAccountName; displayName = $user.DisplayName; firstName = $user.GivenName;
-                    lastName = $user.Surname; email = $user.EmailAddress; enabled = $user.Enabled;
-                    description = $user.Description; lastLogon = $user.LastLogonDate; passwordLastSet = $user.PasswordLastSet;
-                    created = $user.Created; modified = $user.Modified; distinguishedName = $user.DistinguishedName;
+                    username = $user.SamAccountName
+                    displayName = $user.DisplayName
+                    email = $user.EmailAddress
+                    enabled = $user.Enabled
+                    description = $user.Description
+                    lastLogon = if ($user.LastLogonDate) { $user.LastLogonDate.ToUniversalTime().ToString("o") } else { $null }
+                    passwordLastSet = if ($user.PasswordLastSet) { $user.PasswordLastSet.ToUniversalTime().ToString("o") } else { $null }
+                    created = if ($user.Created) { $user.Created.ToUniversalTime().ToString("o") } else { $null }
                 }
                 groups = $groups
-            } | ConvertTo-Json -Compress -Depth 4
+            }
+            
+            $result | ConvertTo-Json -Compress -Depth 4
         } catch {
             @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
         }
@@ -390,6 +418,7 @@ module.exports = {
     installAdModule,
     searchAdUsers,
     getAdGroupMembers,
+    getAvailableAdGroups,
     addUserToGroup,
     removeUserFromGroup,
     isUserInGroup,

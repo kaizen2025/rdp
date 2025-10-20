@@ -1,4 +1,4 @@
-// src/pages/DashboardPage.js - VERSION FINALE, COMPLÈTE ET RÉORGANISÉE
+// src/pages/DashboardPage.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +7,6 @@ import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import CardActionArea from '@mui/material/CardActionArea';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -16,7 +15,6 @@ import ListItemAvatar from '@mui/material/ListItemAvatar';
 import Avatar from '@mui/material/Avatar';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
-import Tooltip from '@mui/material/Tooltip';
 
 // Icons
 import DnsIcon from '@mui/icons-material/Dns';
@@ -28,12 +26,44 @@ import HistoryIcon from '@mui/icons-material/History';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import WarningIcon from '@mui/icons-material/Warning';
-import LaptopIcon from '@mui/icons-material/Laptop';
 
+// Import des services et contextes
 import { useApp } from '../contexts/AppContext';
-import { useElectronApi } from '../hooks/useElectronApi';
+import apiService from '../services/apiService';
 
-// --- SOUS-COMPOSANTS ---
+// Hook personnalisé pour simplifier le chargement des données
+const useDataFetching = (fetchFunction, options = {}) => {
+    const { refreshInterval, entityName } = options;
+    const { events } = useApp();
+    const [data, setData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const fetchData = useCallback(async () => {
+        try {
+            if (!data) setIsLoading(true);
+            const result = await fetchFunction();
+            setData(result);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [fetchFunction, data]);
+
+    useEffect(() => {
+        fetchData();
+        let intervalId = refreshInterval ? setInterval(fetchData, refreshInterval) : null;
+        let unsubscribe = entityName ? events.on(`data_updated:${entityName}`, fetchData) : null;
+
+        return () => {
+            if (intervalId) clearInterval(intervalId);
+            if (unsubscribe) unsubscribe();
+        };
+    }, [fetchData, refreshInterval, entityName, events]);
+
+    return { data, isLoading, error, refresh: fetchData };
+};
 
 const StatCard = memo(({ title, value, subtitle, color = 'primary.main', onClick }) => (
     <Card elevation={3} sx={{ height: '100%' }}>
@@ -54,7 +84,7 @@ const ServerStatusWidget = memo(({ serversToPing }) => {
             const results = {};
             for (const server of serversToPing) {
                 try { 
-                    const res = await window.electronAPI.pingServer(server);
+                    const res = await apiService.pingServer(server);
                     results[server] = res.success;
                 } catch { results[server] = false; }
             }
@@ -81,7 +111,7 @@ const ServerStatusWidget = memo(({ serversToPing }) => {
 });
 
 const ConnectedTechniciansWidget = memo(() => {
-    const [technicians, setTechnicians] = useState([]);
+    const { data: technicians, isLoading } = useDataFetching(apiService.getConnectedTechnicians, { refreshInterval: 15000, entityName: 'technicians' });
     const calculateConnectionTime = (loginTime) => {
         if (!loginTime) return 'Récent';
         const diffMins = Math.floor((new Date() - new Date(loginTime)) / 60000);
@@ -89,35 +119,34 @@ const ConnectedTechniciansWidget = memo(() => {
         if (diffMins < 60) return `${diffMins} min`;
         return `${Math.floor(diffMins / 60)}h ${diffMins % 60}min`;
     };
-    const fetchTechs = useCallback(async () => {
-        try {
-            const data = await window.electronAPI.getConnectedTechnicians();
-            setTechnicians(data || []);
-        } catch (e) { console.error(e); }
-    }, []);
-    useEffect(() => {
-        fetchTechs();
-        const interval = setInterval(fetchTechs, 15000);
-        return () => clearInterval(interval);
-    }, [fetchTechs]);
 
     return (
         <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}><PeopleIcon sx={{ mr: 1 }} /> Techniciens Connectés ({technicians.length})</Typography>
-            <List dense>
-                {technicians.length > 0 ? technicians.map(tech => (
-                    <ListItem key={tech.id} disableGutters>
-                        <ListItemAvatar sx={{ minWidth: 40 }}><Avatar sx={{ width: 32, height: 32, fontSize: '0.875rem' }}>{tech.avatar}</Avatar></ListItemAvatar>
-                        <ListItemText primary={tech.name} secondary={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><AccessTimeIcon sx={{ fontSize: 14 }} /><Typography variant="caption">{calculateConnectionTime(tech.loginTime)}</Typography></Box>} />
-                    </ListItem>
-                )) : <Typography variant="body2" color="text.secondary">Aucun technicien connecté.</Typography>}
-            </List>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}><PeopleIcon sx={{ mr: 1 }} /> Techniciens Connectés ({technicians?.length || 0})</Typography>
+            {isLoading && !technicians ? <CircularProgress size={24} /> : (
+                <List dense>
+                    {technicians && technicians.length > 0 ? technicians.map(tech => (
+                        <ListItem key={tech.id} disableGutters>
+                            <ListItemAvatar sx={{ minWidth: 40 }}><Avatar sx={{ width: 32, height: 32, fontSize: '0.875rem' }}>{tech.avatar}</Avatar></ListItemAvatar>
+                            <ListItemText 
+                                primary={tech.name} 
+                                secondary={
+                                    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        <AccessTimeIcon sx={{ fontSize: 14 }} />
+                                        <Typography variant="caption">{calculateConnectionTime(tech.loginTime)}</Typography>
+                                    </Box>
+                                } 
+                            />
+                        </ListItem>
+                    )) : <Typography variant="body2" color="text.secondary">Aucun technicien connecté.</Typography>}
+                </List>
+            )}
         </Paper>
     );
 });
 
 const RecentActivityWidget = memo(() => {
-    const { data: activities, isLoading } = useElectronApi('getLoanHistory', { params: [{ limit: 5 }] });
+    const { data: activities, isLoading } = useDataFetching(() => apiService.getLoanHistory({ limit: 5 }), { entityName: 'loans' });
     const getActivityIcon = (eventType) => ({ created: <AssignmentIcon color="success" />, returned: <CheckCircleIcon color="primary" />, extended: <TrendingUpIcon color="info" />, cancelled: <CancelIcon color="error" /> }[eventType] || <HistoryIcon />);
     const getActivityText = (act) => {
         const computer = act.computerName || 'Matériel';
@@ -142,7 +171,7 @@ const RecentActivityWidget = memo(() => {
     );
 });
 
-const LoanListWidget = memo(({ title, loans, icon, navigate }) => (
+const LoanListWidget = memo(({ title, loans, icon }) => (
     <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
         <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>{icon}{title} ({loans.length})</Typography>
         <List dense>
@@ -159,8 +188,8 @@ const LoanListWidget = memo(({ title, loans, icon, navigate }) => (
 const DashboardPage = () => {
     const navigate = useNavigate();
     const { config } = useApp();
-    const { data: stats, isLoading: isLoadingStats } = useElectronApi('getLoanStatistics');
-    const { data: loans, isLoading: isLoadingLoans } = useElectronApi('getLoans');
+    const { data: stats, isLoading: isLoadingStats } = useDataFetching(apiService.getLoanStatistics, { entityName: 'loans' });
+    const { data: loans, isLoading: isLoadingLoans } = useDataFetching(apiService.getLoans, { entityName: 'loans' });
 
     const { activeLoans, overdueLoans } = useMemo(() => {
         if (!loans) return { activeLoans: [], overdueLoans: [] };
@@ -170,9 +199,9 @@ const DashboardPage = () => {
         };
     }, [loans]);
 
-    const isLoading = isLoadingStats || isLoadingLoans;
+    const isLoading = isLoadingStats || isLoadingLoans || !stats || !config;
 
-    if (isLoading || !stats || !config) {
+    if (isLoading) {
         return (<Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress size={60} /></Box>);
     }
 
@@ -188,13 +217,13 @@ const DashboardPage = () => {
                     <Grid item xs={12} sm={6} md={3}><StatCard title="Matériel Total" value={stats.computers?.total || 0} subtitle={`${stats.computers?.available || 0} disponibles`} onClick={() => navigate('/loans', { state: { initialTab: 1 }})} /></Grid>
                     <Grid item xs={12} sm={6} md={3}><StatCard title="Prêts Actifs" value={stats.loans?.active || 0} subtitle={`${stats.loans?.reserved || 0} réservés`} onClick={() => navigate('/loans', { state: { initialTab: 0 }})} color="info.main" /></Grid>
                     <Grid item xs={12} sm={6} md={3}><StatCard title="En Retard" value={(stats.loans?.overdue || 0) + (stats.loans?.critical || 0)} subtitle={`${stats.loans?.critical || 0} critiques`} onClick={() => navigate('/loans', { state: { initialTab: 0, preFilter: 'overdue' }})} color="error.main" /></Grid>
-                    <Grid item xs={12} sm={6} md={3}><StatCard title="Prêts (30j)" value={stats.history?.last30Days || 0} subtitle={`Durée moy: ${stats.history?.averageLoanDays || 0}j`} onClick={() => navigate('/loans', { state: { initialTab: 4 }})} /></Grid>
+                    <Grid item xs={12} sm={6} md={3}><StatCard title="Prêts (Total)" value={stats.history?.totalLoans || 0} onClick={() => navigate('/loans', { state: { initialTab: 3 }})} /></Grid>
                 </Grid></Grid>
 
                 <Grid item xs={12} md={8}><Grid container spacing={3}>
                     <Grid item xs={12}><ServerStatusWidget serversToPing={config?.rds_servers || []} /></Grid>
-                    <Grid item xs={12} md={6}><LoanListWidget title="Prêts en Retard" loans={overdueLoans} icon={<WarningIcon sx={{ mr: 1, color: 'warning.main' }} />} navigate={navigate} /></Grid>
-                    <Grid item xs={12} md={6}><LoanListWidget title="Prêts Actifs" loans={activeLoans} icon={<AssignmentIcon sx={{ mr: 1, color: 'info.main' }} />} navigate={navigate} /></Grid>
+                    <Grid item xs={12} md={6}><LoanListWidget title="Prêts en Retard" loans={overdueLoans} icon={<WarningIcon sx={{ mr: 1, color: 'warning.main' }} />} /></Grid>
+                    <Grid item xs={12} md={6}><LoanListWidget title="Prêts Actifs" loans={activeLoans} icon={<AssignmentIcon sx={{ mr: 1, color: 'info.main' }} />} /></Grid>
                 </Grid></Grid>
 
                 <Grid item xs={12} md={4}><Grid container spacing={3}>

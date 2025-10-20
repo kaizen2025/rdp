@@ -12,6 +12,7 @@ import {
 import LaptopIcon from '@mui/icons-material/Laptop';
 import PersonIcon from '@mui/icons-material/Person';
 import EventIcon from '@mui/icons-material/Event';
+import apiService from '../services/apiService';
 
 const MONTHS_FR = [
     'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -36,11 +37,18 @@ const LoansCalendar = () => {
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
     useEffect(() => {
+        const loadLoans = async () => {
+            try {
+                // CORRECTION ICI
+                const data = await apiService.getLoans();
+                setLoans(data.filter(l => l.status !== 'returned' && l.status !== 'cancelled'));
+            } catch (error) {
+                console.error('Erreur chargement prêts:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
         loadLoans();
-        
-        // Rafraîchir toutes les minutes
-        const interval = setInterval(loadLoans, 60000);
-        return () => clearInterval(interval);
     }, []);
 
     const loadLoans = async () => {

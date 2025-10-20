@@ -15,6 +15,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
+import apiService from '../services/apiService';
 
 // Icons
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
@@ -41,13 +42,13 @@ const UserLoanHistoryPage = () => {
         const loadAllUsers = async () => {
             setLoadingUsers(true);
             try {
-                const usersResult = await window.electronAPI.syncExcelUsers();
+                // CORRECTION ICI
+                const usersResult = await apiService.getExcelUsers();
                 if (usersResult && usersResult.success) {
                     const formattedUsers = Object.values(usersResult.users).flat();
                     const uniqueUsers = Array.from(new Map(formattedUsers.map(user => [user.username, user])).values());
                     setAllUsers(uniqueUsers);
                 } else {
-                    console.error("Échec de la synchronisation des utilisateurs.");
                     setAllUsers([]);
                 }
             } catch (error) {
@@ -60,17 +61,12 @@ const UserLoanHistoryPage = () => {
     }, []);
 
     useEffect(() => {
-        if (!selectedUser) {
-            setHistory([]);
-            return;
-        }
+        if (!selectedUser) { setHistory([]); return; }
         const loadHistory = async () => {
             setHistoryLoading(true);
             try {
-                const userHistory = await window.electronAPI.getLoanHistory({
-                    userName: selectedUser.username,
-                    limit: 1000,
-                });
+                // CORRECTION ICI
+                const userHistory = await apiService.getLoanHistory({ userName: selectedUser.username, limit: 1000 });
                 setHistory(userHistory);
             } catch (error) {
                 console.error("Erreur chargement historique utilisateur:", error);

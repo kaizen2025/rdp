@@ -1,4 +1,4 @@
-// src/layouts/MainLayout.js - VERSION FINALE, COMPLÈTE ET RÉORGANISÉE
+// src/layouts/MainLayout.js - VERSION FINALE POUR L'ARCHITECTURE WEB
 
 import React, { useState, useEffect, Suspense, lazy, useCallback } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -34,6 +34,7 @@ import ComputerIcon from '@mui/icons-material/Computer';
 import ChatIcon from '@mui/icons-material/Chat';
 
 import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService';
 
 // Lazy load pages
 const DashboardPage = lazy(() => import('../pages/DashboardPage'));
@@ -54,7 +55,6 @@ const LoadingFallback = () => (
     </Box>
 );
 
-// --- LISTE DE NAVIGATION FINALE ---
 const navItems = [
     { text: 'Tableau de bord', path: '/dashboard', icon: <DashboardIcon /> },
     { text: 'Sessions RDS', path: '/sessions', icon: <ComputerIcon /> },
@@ -67,7 +67,7 @@ const navItems = [
 function MainLayout({ onLogout, currentTechnician }) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { showNotification } = useApp();
+    const { events } = useApp();
     
     const [userMenuAnchor, setUserMenuAnchor] = useState(null);
     const [chatOpen, setChatOpen] = useState(false);
@@ -75,51 +75,31 @@ function MainLayout({ onLogout, currentTechnician }) {
     const [unreadChatCount, setUnreadChatCount] = useState(0);
     const [unreadLoanNotifs, setUnreadLoanNotifs] = useState(0);
 
-    const loadOnlineTechnicians = useCallback(async () => {
+    const loadData = useCallback(async () => {
         try {
-            const techs = await window.electronAPI.getConnectedTechnicians();
-            setOnlineTechnicians(techs || []);
-        } catch (error) { console.error('Erreur chargement techniciens:', error); }
-    }, []);
-
-    const loadUnreadCounts = useCallback(async () => {
-        try {
-            const [loanNotifs, chatNotifs] = await Promise.all([
-                window.electronAPI.getUnreadNotifications(),
-                window.electronAPI['chat:getUnreadCount']()
+            const [techs, loanNotifs, chatNotifs] = await Promise.all([
+                apiService.getConnectedTechnicians(),
+                apiService.getUnreadNotifications(),
+                // apiService.getChatUnreadCount() // À implémenter
             ]);
+            setOnlineTechnicians(techs || []);
             setUnreadLoanNotifs(loanNotifs?.length || 0);
             setUnreadChatCount(chatNotifs || 0);
-        } catch (error) { console.error('Erreur chargement notifications:', error); }
+        } catch (error) { console.error('Erreur chargement données layout:', error); }
     }, []);
 
     useEffect(() => {
-        loadOnlineTechnicians();
-        loadUnreadCounts();
+        loadData();
+        const interval = setInterval(loadData, 30000);
         
-        const interval = setInterval(() => {
-            loadOnlineTechnicians();
-            loadUnreadCounts();
-        }, 30000);
-
-        const removeListener = window.electronAPI.onDataUpdated((data) => {
-            console.log('Données mises à jour détectées:', data);
-            if (data.file === 'loan_notifications.json' || data.file === 'chat.json') {
-                loadUnreadCounts();
-                if (data.file === 'chat.json' && !chatOpen) {
-                    showNotification('info', 'Nouveau message dans le chat.');
-                }
-            }
-            if (data.file === 'technicians_presence.json') {
-                loadOnlineTechnicians();
-            }
-        });
+        const onNotifUpdate = () => loadData();
+        const unsubscribe = events.on('data_updated:notifications', onNotifUpdate);
 
         return () => {
             clearInterval(interval);
-            if (removeListener) removeListener();
+            unsubscribe();
         };
-    }, [loadOnlineTechnicians, loadUnreadCounts, showNotification, chatOpen]);
+    }, [loadData, events]);
 
     const handleUserMenuOpen = (event) => setUserMenuAnchor(event.currentTarget);
     const handleUserMenuClose = () => setUserMenuAnchor(null);
@@ -132,7 +112,7 @@ function MainLayout({ onLogout, currentTechnician }) {
                         RDS Viewer - Anecoop
                     </Typography>
 
-                    <Tooltip title="Historique des Actions"><IconButton color="inherit" onClick={() => navigate('/history')}><HistoryIcon /></IconButton></Tooltip>
+                    <Tooltip title="Historique (non disponible)"><IconButton color="inherit" onClick={() => navigate('/history')} disabled><HistoryIcon /></IconButton></Tooltip>
                     <Tooltip title="Chat entre techniciens"><IconButton color="inherit" onClick={() => setChatOpen(true)}><Badge badgeContent={unreadChatCount} color="success"><ChatIcon /></Badge></IconButton></Tooltip>
                     <Tooltip title="Notifications de prêts"><IconButton color="inherit" onClick={() => navigate('/loans')}><Badge badgeContent={unreadLoanNotifs} color="error"><LaptopChromebookIcon /></Badge></IconButton></Tooltip>
 

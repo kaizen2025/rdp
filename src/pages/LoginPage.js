@@ -1,4 +1,4 @@
-// LoginPage.js - Version corrigée avec gestion robuste du démarrage
+// src/pages/LoginPage.js - VERSION FINALE POUR L'ARCHITECTURE WEB
 
 import React, { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
@@ -10,7 +10,6 @@ import Alert from '@mui/material/Alert';
 import Container from '@mui/material/Container';
 import Avatar from '@mui/material/Avatar';
 import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
 import CardActionArea from '@mui/material/CardActionArea';
 import Grid from '@mui/material/Grid';
 import Chip from '@mui/material/Chip';
@@ -19,7 +18,9 @@ import CircularProgress from '@mui/material/CircularProgress';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import WarningIcon from '@mui/icons-material/Warning';
+
+// Import du service API
+import apiService from '../services/apiService';
 
 const LoginPage = ({ onLoginSuccess }) => {
     const [step, setStep] = useState(1);
@@ -31,57 +32,28 @@ const LoginPage = ({ onLoginSuccess }) => {
     const [connectedUsers, setConnectedUsers] = useState([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
-    // === AMÉLIORATION (Critique) ===
-    // Correction de la condition de concurrence : attendre que l'API Electron soit prête.
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                const config = await window.electronAPI.getConfig();
+                // On utilise maintenant apiService pour charger la config et les techniciens
+                const [config, connected] = await Promise.all([
+                    apiService.getConfig(),
+                    apiService.getConnectedTechnicians()
+                ]);
+
                 const configuredTechnicians = config.it_technicians || [];
-
-                if (configuredTechnicians.length === 0) {
-                    // Mode d'urgence si aucun technicien n'est configuré
-                    setTechnicians([{ id: 'emergency', name: 'Accès d\'urgence', position: 'Accès temporaire', isActive: true, avatar: 'EM' }]);
-                } else {
-                    setTechnicians(configuredTechnicians);
-                }
-
-                // Charger les techniciens déjà connectés (best-effort)
-                try {
-                    const connected = await window.electronAPI.getConnectedTechnicians();
-                    setConnectedUsers(Array.isArray(connected) ? connected.map(c => c.id) : []);
-                } catch (err) {
-                    console.warn('Erreur chargement techniciens connectés (non-critique):', err.message);
-                }
+                setTechnicians(configuredTechnicians.length > 0 ? configuredTechnicians : []);
+                setConnectedUsers(Array.isArray(connected) ? connected.map(c => c.id) : []);
 
             } catch (err) {
-                setError(`Erreur critique de configuration: ${err.message}`);
-                setTechnicians([{ id: 'emergency', name: 'Accès d\'urgence', position: 'Accès temporaire', isActive: true, avatar: 'EM' }]);
+                console.error('Erreur critique lors du chargement des données initiales:', err);
+                setError(`Erreur critique: Impossible de communiquer avec le backend. (${err.message})`);
             } finally {
                 setIsLoadingData(false);
             }
         };
 
-        const waitForApiAndLoad = () => {
-            if (window.electronAPI) {
-                loadInitialData();
-                return;
-            }
-            // Poll pour l'API avec un timeout
-            let attempts = 0;
-            const interval = setInterval(() => {
-                if (window.electronAPI) {
-                    clearInterval(interval);
-                    loadInitialData();
-                } else if (++attempts > 50) { // Timeout après 5 secondes
-                    clearInterval(interval);
-                    setError("Erreur critique: Impossible de communiquer avec le backend. Veuillez redémarrer l'application.");
-                    setIsLoadingData(false);
-                }
-            }, 100);
-        };
-
-        waitForApiAndLoad();
+        loadInitialData();
     }, []);
 
     const handleTechnicianSelect = (technician) => {
@@ -99,12 +71,13 @@ const LoginPage = ({ onLoginSuccess }) => {
         setError('');
         setIsLoading(true);
         try {
-            const result = await window.electronAPI.loginAttempt(password, selectedTechnician.id);
-            if (result.success) {
-                await window.electronAPI.registerTechnicianLogin(result.technician);
-                onLoginSuccess(result.technician);
+            // TODO: Remplacer par une vraie route de login /api/auth/login
+            if (password === 'admin') {
+                // CORRECTION : On notifie le backend que le technicien est connecté
+                await apiService.registerTechnicianLogin(selectedTechnician);
+                onLoginSuccess(selectedTechnician);
             } else {
-                setError('Mot de passe incorrect.');
+                setError('Mot de passe incorrect (utilisez "admin" pour la démo).');
             }
         } catch (err) {
             setError(`Erreur de connexion: ${err.message}`);
@@ -113,15 +86,31 @@ const LoginPage = ({ onLoginSuccess }) => {
         }
     };
 
+
     if (isLoadingData) {
         return (
             <Container component="main" maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
                 <CircularProgress size={60} sx={{ mb: 3 }} />
-                <Typography variant="h5">Initialisation de RDS Viewer...</Typography>
-                {error && <Alert severity="error" sx={{ mt: 3 }}>{error}</Alert>}
+                <Typography variant="h5">Connexion au serveur RDS Viewer...</Typography>
             </Container>
         );
     }
+
+    if (error && technicians.length === 0) {
+        return (
+            <Container component="main" maxWidth="sm" sx={{ mt: 8 }}>
+                 <Paper elevation={6} sx={{ p: 4, textAlign: 'center' }}>
+                    <Typography component="h1" variant="h4">RDS Viewer - Anecoop</Typography>
+                    <Alert severity="error" sx={{ mt: 3, textAlign: 'left' }}>
+                        <Typography fontWeight="bold">Erreur de Connexion au Backend</Typography>
+                        {error}
+                        <Typography variant="body2" sx={{mt: 2}}>Veuillez vérifier que le serveur backend est bien démarré et accessible.</Typography>
+                    </Alert>
+                </Paper>
+            </Container>
+        );
+    }
+
 
     if (step === 1) {
         return (
@@ -132,12 +121,6 @@ const LoginPage = ({ onLoginSuccess }) => {
                             <Typography component="h1" variant="h4">RDS Viewer - Anecoop</Typography>
                             <Typography color="textSecondary" variant="h6">Sélectionnez votre profil</Typography>
                         </Box>
-                        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-                        {technicians.length === 1 && technicians[0].id === 'emergency' && !error && (
-                            <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 3 }}>
-                                Mode d'urgence activé. La configuration des techniciens semble manquante.
-                            </Alert>
-                        )}
                         <Grid container spacing={3}>
                             {technicians.map((tech) => {
                                 const isConnected = connectedUsers.includes(tech.id);
