@@ -48,7 +48,7 @@ const GuacamoleViewer = ({ token, url }) => {
                         message = "Connexion au serveur Guacamole refusée. Le service est-il démarré sur le port 8080 ?";
                         break;
                     case 517: // Client forbidden
-                        message = "Erreur 517 : Accès refusé. Le token de connexion est peut-être invalide ou expiré.";
+                        message = "Erreur 517 : Accès refusé par Guacamole. Le token est invalide ou expiré. Assurez-vous que la 'secretKey' dans votre config.json correspond bien à la propriété 'json-secret' dans le fichier guacamole.properties de votre serveur Guacamole.";
                         break;
                     default:
                         message = `Erreur Guacamole non reconnue (Code: ${error.code}). Contactez un administrateur.`;

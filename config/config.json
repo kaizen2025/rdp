@@ -36,5 +36,11 @@
   "it_staff": ["Kevin BIVIA", "Meher BENHASSINE", "Macha ANTON", "Christelle MOLES"],
   "loans": { "maxLoanDays": 90, "maxExtensions": 3, "autoNotifications": true },
   "notifications": { "enabled": true, "loanReminders": true, "overdueLoanAlerts": true },
-  "ui": { "theme": "light", "autoRefresh": true, "compactView": false }
+  "ui": { "theme": "light", "autoRefresh": true, "compactView": false },
+  "excelColumnMapping": {
+    "Username": "username",
+    "Full Name": "displayName",
+    "Server": "server",
+    "Password": "password"
+  }
 }
