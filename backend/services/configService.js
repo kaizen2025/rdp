@@ -1,63 +1,106 @@
-// backend/services/configService.js - VERSION FINALE CORRIGÉE
+// backend/services/configService.js - VERSION FINALE AVEC RÉTROCOMPATIBILITÉ
 
+const fs = require('fs').promises;
 const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
-const os = require('os');
 
-// CHEMIN CORRIGÉ : On cherche le config.json dans le dossier config à la racine du projet
-const configPath = path.join(__dirname, '..', '..', 'config', 'config.json');
+const CONFIG_PATH = path.join(__dirname, '..', '..', 'config', 'config.json');
+const TEMPLATE_CONFIG_PATH = path.join(__dirname, '..', '..', 'config', 'config.template.json');
 
-// Le userDataPath est pour les fichiers locaux générés par l'application (cache, etc.)
-const userDataPath = path.join(os.homedir(), 'AppData', 'Roaming', 'RDSViewerBackend');
+let appConfig = null;
+let isConfigValid = false;
 
-// ... (le reste du fichier est identique, je le remets pour être complet)
-
-const EXCEL_CONFIG = {
-    localCachePath: path.join(userDataPath, 'excel-cache.json'),
-    columnMapping: {
-        'Identifiant': 'username', 'Mot de passe': 'password', 'Office': 'officePassword',
-        'Nom complet': 'displayName', 'Service': 'department', 'Email': 'email', 'Serveur': 'server'
+/**
+ * Normalise la configuration en mémoire pour assurer la rétrocompatibilité.
+ * Si 'defaultExcelPath' existe, sa valeur est copiée dans 'excelFilePath'.
+ * @param {object} config - L'objet de configuration.
+ */
+function normalizeConfig(config) {
+    if (config.defaultExcelPath && !config.excelFilePath) {
+        console.log("🔧 Clé de configuration obsolète 'defaultExcelPath' détectée. Utilisation de sa valeur pour 'excelFilePath'.");
+        config.excelFilePath = config.defaultExcelPath;
     }
-};
+    // On pourrait ajouter d'autres normalisations ici à l'avenir.
+}
 
-let appConfig = {}; // On ne charge pas de défaut ici, on le fait dans loadConfigAsync
+function validateConfig(config) {
+    const errors = [];
+    const requiredKeys = {
+        'databasePath': 'Le chemin vers la base de données SQLite.',
+        'excelFilePath': 'Le chemin vers le fichier Excel des utilisateurs (ou defaultExcelPath).',
+        'guacamole.url': 'L\'URL de votre serveur Guacamole.',
+        'guacamole.secretKey': 'La clé secrète pour l\'authentification Guacamole.',
+    };
 
-async function safeReadJsonFile(filePath, defaultValue = null) {
-    try {
-        if (!fs.existsSync(filePath)) {
-            console.warn(`Fichier de configuration introuvable à : ${filePath}`);
-            return defaultValue;
+    for (const [key, description] of Object.entries(requiredKeys)) {
+        const value = key.split('.').reduce((o, i) => o?.[i], config);
+        if (!value) {
+            errors.push(`Clé manquante: '${key}'. Description: ${description}`);
+        } else if (typeof value === 'string' && (value.includes('VOTRE_') || value.includes('CHEMIN\\VERS'))) {
+            errors.push(`Valeur placeholder détectée pour '${key}'. Veuillez la remplacer.`);
         }
-        const data = await fs.promises.readFile(filePath, 'utf-8');
-        return JSON.parse(data);
+    }
+    return { isValid: errors.length === 0, errors };
+}
+
+async function loadConfigAsync() {
+    try {
+        const data = await fs.readFile(CONFIG_PATH, 'utf-8');
+        appConfig = JSON.parse(data);
     } catch (error) {
-        console.error(`Erreur de lecture ou de parsing du fichier JSON ${filePath}:`, error);
-        return defaultValue;
+        console.error(`⚠️ Impossible de lire config.json (${error.message}). Utilisation de la configuration template comme fallback.`);
+        appConfig = await fs.readFile(TEMPLATE_CONFIG_PATH, 'utf-8').then(JSON.parse).catch(() => {
+            throw new Error("ERREUR CRITIQUE: config.json et config.template.json sont tous deux illisibles.");
+        });
+        isConfigValid = false;
+        return;
+    }
+
+    // **ÉTAPE DE NORMALISATION**
+    normalizeConfig(appConfig);
+
+    const { isValid, errors } = validateConfig(appConfig);
+    isConfigValid = isValid;
+
+    if (!isValid) {
+        console.error("====================== ERREUR DE CONFIGURATION ======================");
+        console.error("Le fichier de configuration est invalide. Le serveur démarre en mode dégradé.");
+        errors.forEach(err => console.error(`- ${err}`));
+        console.error("=====================================================================");
+    } else {
+        console.log("✅ Configuration chargée et validée avec succès.");
     }
 }
 
-const configService = {
-    appConfig: {},
+function getConfig() {
+    return appConfig || {};
+}
 
-    async loadConfigAsync() {
-        const loadedConfig = await safeReadJsonFile(configPath, null);
-        if (!loadedConfig) {
-            throw new Error(`Échec du chargement du fichier de configuration. Assurez-vous que le fichier ${configPath} existe et est un JSON valide.`);
+function isConfigurationValid() {
+    return isConfigValid;
+}
+
+async function saveConfig(newConfig) {
+    try {
+        await fs.writeFile(CONFIG_PATH, JSON.stringify(newConfig, null, 4), 'utf-8');
+        appConfig = newConfig;
+        normalizeConfig(appConfig); // Normaliser après sauvegarde aussi
+        const { isValid, errors } = validateConfig(appConfig);
+        isConfigValid = isValid;
+        if (!isValid) {
+            console.warn("Configuration sauvegardée, mais elle contient des erreurs:", errors);
         }
-        this.appConfig = loadedConfig;
-        console.log('Configuration chargée avec succès.');
-    },
+        return { success: true, message: "Configuration sauvegardée." };
+    } catch (error) {
+        return { success: false, message: `Erreur: ${error.message}` };
+    }
+}
 
-    getConfig() {
-        const { password, ...safeConfig } = this.appConfig;
-        return { ...safeConfig, hasAdminPassword: !!password };
+module.exports = {
+    loadConfigAsync,
+    getConfig,
+    saveConfig,
+    isConfigurationValid,
+    get appConfig() {
+        return appConfig;
     },
-    
-    // ... (les autres fonctions comme saveConfig, getSharedFilePath, etc. restent les mêmes)
-    
-    EXCEL_CONFIG,
-    userDataPath,
 };
-
-module.exports = configService;

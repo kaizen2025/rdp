@@ -1,0 +1,12 @@
+
+> rds-viewer-anecoop-web@3.0.0 dev
+> concurrently "npm run server:dev" "npm start"
+
+[0]
+[0] > rds-viewer-anecoop-web@3.0.0 server:dev
+[0] > nodemon server/server.js
+[0]
+[1]
+[1] > rds-viewer-anecoop-web@3.0.0 start
+[1] > react-scripts start
+[1]
