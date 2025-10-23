@@ -1,4 +1,4 @@
-// src/pages/LoginPage.js - VERSION FINALE POUR L'ARCHITECTURE WEB
+// src/pages/LoginPage.js - VERSION FINALE UTILISANT apiService.login
 
 import React, { useState, useEffect } from 'react';
 import Box from '@mui/material/Box';
@@ -19,10 +19,11 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-// Import du service API
 import apiService from '../services/apiService';
+import { useApp } from '../contexts/AppContext';
 
 const LoginPage = ({ onLoginSuccess }) => {
+    const { setCurrentTechnician } = useApp();
     const [step, setStep] = useState(1);
     const [selectedTechnician, setSelectedTechnician] = useState(null);
     const [password, setPassword] = useState('');
@@ -35,24 +36,19 @@ const LoginPage = ({ onLoginSuccess }) => {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                // On utilise maintenant apiService pour charger la config et les techniciens
                 const [config, connected] = await Promise.all([
                     apiService.getConfig(),
                     apiService.getConnectedTechnicians()
                 ]);
-
                 const configuredTechnicians = config.it_technicians || [];
-                setTechnicians(configuredTechnicians.length > 0 ? configuredTechnicians : []);
+                setTechnicians(configuredTechnicians);
                 setConnectedUsers(Array.isArray(connected) ? connected.map(c => c.id) : []);
-
             } catch (err) {
-                console.error('Erreur critique lors du chargement des données initiales:', err);
                 setError(`Erreur critique: Impossible de communiquer avec le backend. (${err.message})`);
             } finally {
                 setIsLoadingData(false);
             }
         };
-
         loadInitialData();
     }, []);
 
@@ -71,10 +67,12 @@ const LoginPage = ({ onLoginSuccess }) => {
         setError('');
         setIsLoading(true);
         try {
-            // TODO: Remplacer par une vraie route de login /api/auth/login
+            // TODO: Remplacer la logique de mot de passe par un vrai appel API d'authentification
             if (password === 'admin') {
-                // CORRECTION : On notifie le backend que le technicien est connecté
-                await apiService.registerTechnicianLogin(selectedTechnician);
+                // CORRECTION : Appel de la méthode "login" qui existe dans l'instance d'apiService
+                await apiService.login(selectedTechnician);
+                
+                setCurrentTechnician(selectedTechnician); 
                 onLoginSuccess(selectedTechnician);
             } else {
                 setError('Mot de passe incorrect (utilisez "admin" pour la démo).');
@@ -86,14 +84,8 @@ const LoginPage = ({ onLoginSuccess }) => {
         }
     };
 
-
     if (isLoadingData) {
-        return (
-            <Container component="main" maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
-                <CircularProgress size={60} sx={{ mb: 3 }} />
-                <Typography variant="h5">Connexion au serveur RDS Viewer...</Typography>
-            </Container>
-        );
+        return <Container component="main" maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}><CircularProgress size={60} sx={{ mb: 3 }} /><Typography variant="h5">Connexion au serveur RDS Viewer...</Typography></Container>;
     }
 
     if (error && technicians.length === 0) {
@@ -101,26 +93,18 @@ const LoginPage = ({ onLoginSuccess }) => {
             <Container component="main" maxWidth="sm" sx={{ mt: 8 }}>
                  <Paper elevation={6} sx={{ p: 4, textAlign: 'center' }}>
                     <Typography component="h1" variant="h4">RDS Viewer - Anecoop</Typography>
-                    <Alert severity="error" sx={{ mt: 3, textAlign: 'left' }}>
-                        <Typography fontWeight="bold">Erreur de Connexion au Backend</Typography>
-                        {error}
-                        <Typography variant="body2" sx={{mt: 2}}>Veuillez vérifier que le serveur backend est bien démarré et accessible.</Typography>
-                    </Alert>
+                    <Alert severity="error" sx={{ mt: 3, textAlign: 'left' }}><Typography fontWeight="bold">Erreur de Connexion au Backend</Typography>{error}<Typography variant="body2" sx={{mt: 2}}>Veuillez vérifier que le serveur backend est bien démarré et accessible.</Typography></Alert>
                 </Paper>
             </Container>
         );
     }
-
 
     if (step === 1) {
         return (
             <Container component="main" maxWidth="md" sx={{ mt: 4 }}>
                 <Fade in={true}>
                     <Paper elevation={6} sx={{ p: 4 }}>
-                        <Box sx={{ textAlign: 'center', mb: 4 }}>
-                            <Typography component="h1" variant="h4">RDS Viewer - Anecoop</Typography>
-                            <Typography color="textSecondary" variant="h6">Sélectionnez votre profil</Typography>
-                        </Box>
+                        <Box sx={{ textAlign: 'center', mb: 4 }}><Typography component="h1" variant="h4">RDS Viewer - Anecoop</Typography><Typography color="textSecondary" variant="h6">Sélectionnez votre profil</Typography></Box>
                         <Grid container spacing={3}>
                             {technicians.map((tech) => {
                                 const isConnected = connectedUsers.includes(tech.id);
@@ -128,10 +112,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                                     <Grid item xs={12} sm={6} md={3} key={tech.id}>
                                         <Card elevation={isConnected ? 4 : 2} sx={{ height: '100%', border: isConnected ? '2px solid' : '1px solid transparent', borderColor: 'success.main', opacity: tech.isActive ? 1 : 0.6 }}>
                                             <CardActionArea onClick={() => handleTechnicianSelect(tech)} disabled={!tech.isActive} sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-                                                <Box sx={{ position: 'relative' }}>
-                                                    <Avatar sx={{ width: 64, height: 64, mb: 2, bgcolor: 'primary.main' }}>{tech.avatar}</Avatar>
-                                                    {isConnected && <CheckCircleIcon color="success" sx={{ position: 'absolute', bottom: 10, right: -5, bgcolor: 'white', borderRadius: '50%' }} />}
-                                                </Box>
+                                                <Box sx={{ position: 'relative' }}><Avatar sx={{ width: 64, height: 64, mb: 2, bgcolor: 'primary.main' }}>{tech.avatar}</Avatar>{isConnected && <CheckCircleIcon color="success" sx={{ position: 'absolute', bottom: 10, right: -5, bgcolor: 'white', borderRadius: '50%' }} />}</Box>
                                                 <Typography variant="h6" component="h2" textAlign="center">{tech.name}</Typography>
                                                 <Typography variant="body2" color="textSecondary" textAlign="center">{tech.position}</Typography>
                                                 {!tech.isActive && <Chip label="Désactivé" size="small" color="error" sx={{ mt: 1 }} />}
@@ -158,9 +139,7 @@ const LoginPage = ({ onLoginSuccess }) => {
                     <Box component="form" onSubmit={handleLogin} sx={{ width: '100%' }}>
                         <TextField margin="normal" required fullWidth name="password" label="Mot de passe" type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} disabled={isLoading} />
                         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
-                        <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }} startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <LockOpenIcon />} disabled={isLoading}>
-                            {isLoading ? 'Connexion...' : 'Se connecter'}
-                        </Button>
+                        <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, mb: 2 }} startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <LockOpenIcon />} disabled={isLoading}>{isLoading ? 'Connexion...' : 'Se connecter'}</Button>
                     </Box>
                 </Paper>
             </Fade>

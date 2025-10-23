@@ -1,11 +1,11 @@
-// src/pages/AccessoriesManagement.js - VERSION COMPLÈTE ET CORRIGÉE
+// src/pages/AccessoriesManagement.js - CORRIGÉ POUR UTILISER L'API WEB
 
-import React, { useState, useEffect, useCallback } from 'react'; // <-- CORRECTION ICI
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer,
     TableHead, TableRow, IconButton, Dialog, DialogTitle, DialogContent,
     DialogActions, TextField, Grid, FormControl, InputLabel, Select, MenuItem,
-    Chip, Alert, Switch, FormControlLabel
+    Chip, Switch, FormControlLabel, CircularProgress
 } from '@mui/material';
 
 // Icons
@@ -22,9 +22,9 @@ import KeyboardIcon from '@mui/icons-material/Keyboard';
 import HeadsetIcon from '@mui/icons-material/Headset';
 import StorageIcon from '@mui/icons-material/Storage';
 import DevicesIcon from '@mui/icons-material/Devices';
-import CircularProgress from '@mui/material/CircularProgress'; // Ajout de l'import manquant
 
 import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService'; // Utiliser le service API
 
 const AVAILABLE_ICONS = [
     { id: 'mouse', label: 'Souris', icon: <MouseIcon /> },
@@ -50,7 +50,8 @@ const AccessoriesManagement = () => {
     const loadAccessories = useCallback(async () => {
         setIsLoading(true);
         try {
-            const data = await window.electronAPI.getAccessories();
+            // CORRECTION: Utilisation de apiService
+            const data = await apiService.getAccessories();
             setAccessories(data || []);
         } catch (err) {
             showNotification('error', 'Erreur lors du chargement des accessoires');
@@ -87,14 +88,11 @@ const AccessoriesManagement = () => {
         }
 
         try {
-            const result = await window.electronAPI.saveAccessory(formData);
-            if (result.success) {
-                showNotification('success', `Accessoire ${editingAccessory ? 'modifié' : 'ajouté'} avec succès.`);
-                handleCloseDialog();
-                await loadAccessories();
-            } else {
-                throw new Error(result.error);
-            }
+            // CORRECTION: Utilisation de apiService
+            const result = await apiService.saveAccessory(formData);
+            showNotification('success', `Accessoire ${editingAccessory ? 'modifié' : 'ajouté'} avec succès.`);
+            handleCloseDialog();
+            await loadAccessories();
         } catch (err) {
             showNotification('error', `Erreur lors de la sauvegarde: ${err.message}`);
         }
@@ -104,13 +102,10 @@ const AccessoriesManagement = () => {
         if (!window.confirm(`Supprimer l'accessoire "${accessory.name}" ?`)) return;
 
         try {
-            const result = await window.electronAPI.deleteAccessory(accessory.id);
-            if (result.success) {
-                showNotification('success', 'Accessoire supprimé.');
-                await loadAccessories();
-            } else {
-                throw new Error(result.error);
-            }
+            // CORRECTION: Utilisation de apiService
+            await apiService.deleteAccessory(accessory.id);
+            showNotification('success', 'Accessoire supprimé.');
+            await loadAccessories();
         } catch (err) {
             showNotification('error', `Erreur lors de la suppression: ${err.message}`);
         }
@@ -124,41 +119,21 @@ const AccessoriesManagement = () => {
     return (
         <Box sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-                <Box>
-                    <Typography variant="h5" gutterBottom>Gestion des Accessoires</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        Configurez les accessoires disponibles pour les prêts de matériel.
-                    </Typography>
-                </Box>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
-                    Ajouter un accessoire
-                </Button>
+                <Box><Typography variant="h5" gutterBottom>Gestion des Accessoires</Typography><Typography variant="body2" color="text.secondary">Configurez les accessoires disponibles pour les prêts de matériel.</Typography></Box>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>Ajouter un accessoire</Button>
             </Box>
 
             <Paper elevation={3}>
                 <TableContainer>
                     <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Icône</TableCell>
-                                <TableCell>Nom</TableCell>
-                                <TableCell>Statut</TableCell>
-                                <TableCell align="right">Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
+                        <TableHead><TableRow><TableCell>Icône</TableCell><TableCell>Nom</TableCell><TableCell>Statut</TableCell><TableCell align="right">Actions</TableCell></TableRow></TableHead>
                         <TableBody>
-                            {isLoading ? (
-                                <TableRow><TableCell colSpan={4} align="center"><CircularProgress /></TableCell></TableRow>
-                            ) : accessories.length === 0 ? (
-                                <TableRow><TableCell colSpan={4} align="center">Aucun accessoire configuré</TableCell></TableRow>
-                            ) : (
+                            {isLoading ? (<TableRow><TableCell colSpan={4} align="center"><CircularProgress /></TableCell></TableRow>) : accessories.length === 0 ? (<TableRow><TableCell colSpan={4} align="center">Aucun accessoire configuré</TableCell></TableRow>) : (
                                 accessories.map(accessory => (
                                     <TableRow key={accessory.id} hover>
                                         <TableCell>{getIconComponent(accessory.icon)}</TableCell>
                                         <TableCell><Typography variant="body1" fontWeight="medium">{accessory.name}</Typography></TableCell>
-                                        <TableCell>
-                                            <Chip label={accessory.active ? "Actif" : "Inactif"} color={accessory.active ? "success" : "default"} size="small" />
-                                        </TableCell>
+                                        <TableCell><Chip label={accessory.active ? "Actif" : "Inactif"} color={accessory.active ? "success" : "default"} size="small" /></TableCell>
                                         <TableCell align="right">
                                             <IconButton size="small" onClick={() => handleOpenDialog(accessory)}><EditIcon fontSize="small" /></IconButton>
                                             <IconButton size="small" color="error" onClick={() => handleDelete(accessory)}><DeleteIcon fontSize="small" /></IconButton>
@@ -175,24 +150,16 @@ const AccessoriesManagement = () => {
                 <DialogTitle>{editingAccessory ? 'Modifier l\'accessoire' : 'Ajouter un accessoire'}</DialogTitle>
                 <DialogContent>
                     <Grid container spacing={2} sx={{ mt: 1 }}>
-                        <Grid item xs={12}>
-                            <TextField label="Nom de l'accessoire *" fullWidth value={formData.name || ''} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Chargeur USB-C 65W" />
-                        </Grid>
+                        <Grid item xs={12}><TextField label="Nom de l'accessoire *" fullWidth value={formData.name || ''} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ex: Chargeur USB-C 65W" /></Grid>
                         <Grid item xs={12}>
                             <FormControl fullWidth>
                                 <InputLabel>Icône</InputLabel>
                                 <Select value={formData.icon || 'devices'} label="Icône" onChange={(e) => setFormData({ ...formData, icon: e.target.value })}>
-                                    {AVAILABLE_ICONS.map(icon => (
-                                        <MenuItem key={icon.id} value={icon.id}>
-                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{icon.icon}{icon.label}</Box>
-                                        </MenuItem>
-                                    ))}
+                                    {AVAILABLE_ICONS.map(icon => (<MenuItem key={icon.id} value={icon.id}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{icon.icon}{icon.label}</Box></MenuItem>))}
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12}>
-                            <FormControlLabel control={<Switch checked={formData.active} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} label="Accessoire actif (disponible pour les prêts)" />
-                        </Grid>
+                        <Grid item xs={12}><FormControlLabel control={<Switch checked={formData.active} onChange={(e) => setFormData({ ...formData, active: e.target.checked })} />} label="Accessoire actif (disponible pour les prêts)" /></Grid>
                     </Grid>
                 </DialogContent>
                 <DialogActions>

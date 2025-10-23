@@ -1,4 +1,4 @@
-// electron/services/accessoriesService.js - VERSION COMPLÈTE REFACTORISÉE POUR SQLITE
+// backend/services/accessoriesService.js - VERSION FINALE REFACTORISÉE POUR SQLITE
 
 const db = require('./databaseService');
 const { generateId } = require('./utils');
@@ -59,7 +59,6 @@ async function saveAccessory(accessory, technician) {
         return { success: true };
     } catch (error) {
         console.error('Erreur lors de la sauvegarde de l\'accessoire:', error);
-        // Gérer le cas spécifique d'un nom dupliqué
         if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
             return { success: false, error: `Un accessoire avec le nom "${accessory.name}" existe déjà.` };
         }
@@ -86,50 +85,9 @@ async function deleteAccessory(accessoryId, technician) {
     }
 }
 
-/**
- * Récupère les statistiques d'utilisation des accessoires en se basant sur les prêts.
- * @returns {Promise<Array<object>>}
- */
-async function getAccessoryStatistics() {
-    try {
-        const accessories = await getAccessories();
-        const loans = await require('./dataService').getLoans(); // Utilise le dataService refactorisé
-
-        const stats = accessories.map(accessory => {
-            const loanCount = loans.filter(loan => loan.accessories && loan.accessories.includes(accessory.id)).length;
-            
-            const activeLoanCount = loans.filter(loan =>
-                loan.accessories && loan.accessories.includes(accessory.id) &&
-                ['active', 'overdue', 'critical', 'reserved'].includes(loan.status)
-            ).length;
-
-            const missingCount = loans.filter(loan =>
-                loan.returnData?.missingAccessories &&
-                loan.returnData.missingAccessories.includes(accessory.id)
-            ).length;
-
-            return {
-                id: accessory.id,
-                name: accessory.name,
-                icon: accessory.icon,
-                totalLoans: loanCount,
-                currentlyLoaned: activeLoanCount,
-                missing: missingCount,
-                active: accessory.active,
-            };
-        });
-
-        return stats;
-    } catch (error) {
-        console.error('Erreur récupération statistiques accessoires:', error);
-        return [];
-    }
-}
-
 
 module.exports = {
     getAccessories,
     saveAccessory,
     deleteAccessory,
-    getAccessoryStatistics,
 };

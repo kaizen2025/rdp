@@ -1,3 +1,5 @@
+// src/components/SendMessageDialog.js - CORRIGÉ POUR UTILISER L'API WEB
+
 import React, { useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -9,6 +11,7 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
+import apiService from '../services/apiService'; // Utiliser le service API
 
 const SendMessageDialog = ({ open, onClose, selectedSessions, sessions }) => {
     const [message, setMessage] = useState('');
@@ -16,18 +19,26 @@ const SendMessageDialog = ({ open, onClose, selectedSessions, sessions }) => {
     const getSessionDetails = () => {
         return selectedSessions.map(id => {
             const [server, sessionId] = id.split('-');
-            const session = sessions.find(s => s.server === server && s.id === sessionId);
-            return session ? `${session.user} sur ${session.server}` : `Session ${sessionId} sur ${server}`;
+            const session = sessions.find(s => s.server === server && s.sessionId === sessionId);
+            return session ? `${session.username} sur ${session.server}` : `Session ${sessionId} sur ${server}`;
         });
     };
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!message.trim()) return;
 
-        selectedSessions.forEach(id => {
+        const promises = selectedSessions.map(id => {
             const [server, sessionId] = id.split('-');
-            window.electronAPI.sendMessage({ server, sessionId, message });
+            // CORRECTION: Utilisation de apiService
+            return apiService.sendRdsMessage(server, sessionId, message);
         });
+
+        try {
+            await Promise.all(promises);
+        } catch(e) {
+            console.error("Erreur lors de l'envoi du/des message(s):", e);
+            // On pourrait afficher une notification d'erreur ici
+        }
 
         setMessage('');
         onClose();
@@ -38,7 +49,7 @@ const SendMessageDialog = ({ open, onClose, selectedSessions, sessions }) => {
             <DialogTitle>Envoyer un message</DialogTitle>
             <DialogContent>
                 <Typography variant="subtitle1" gutterBottom>Destinataires :</Typography>
-                <List dense sx={{ maxHeight: 150, overflow: 'auto', mb: 2 }}>
+                <List dense sx={{ maxHeight: 150, overflow: 'auto', mb: 2, border: '1px solid #ddd', borderRadius: 1 }}>
                     {getSessionDetails().map((detail, index) => (
                         <ListItem key={index}><ListItemText primary={detail} /></ListItem>
                     ))}

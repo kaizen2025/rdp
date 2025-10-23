@@ -1,4 +1,4 @@
-// src/pages/ComputerLoanHistoryPage.js - NOUVEAU COMPOSANT
+// src/pages/ComputerLoanHistoryPage.js - CORRIGÉ POUR UTILISER L'API WEB
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -12,6 +12,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService'; // Utiliser le service API
 
 const eventConfig = {
     created: {
@@ -49,9 +50,9 @@ const ComputerLoanHistoryPage = () => {
         const loadComputers = async () => {
             setLoadingComputers(true);
             try {
-                const data = await window.electronAPI.getComputers();
+                // CORRECTION : Utilisation de apiService
+                const data = await apiService.getComputers();
                 if (Array.isArray(data) && data.length > 0) {
-                    // Trier par nom
                     const sortedComputers = data.sort((a, b) => 
                         (a.name || '').localeCompare(b.name || '')
                     );
@@ -80,7 +81,8 @@ const ComputerLoanHistoryPage = () => {
         const loadHistory = async () => {
             setHistoryLoading(true);
             try {
-                const computerHistory = await window.electronAPI.getLoanHistory({
+                // CORRECTION : Utilisation de apiService
+                const computerHistory = await apiService.getLoanHistory({
                     computerId: selectedComputer.id,
                     limit: 1000
                 });
@@ -165,7 +167,7 @@ const ComputerLoanHistoryPage = () => {
                         />
                     )}
                     renderOption={(props, option) => (
-                        <li {...props}>
+                        <li {...props} key={option.id}>
                             <Box>
                                 <Typography variant="body1">{option.name}</Typography>
                                 <Typography variant="caption" color="text.secondary">
@@ -179,7 +181,6 @@ const ComputerLoanHistoryPage = () => {
 
             {selectedComputer && (
                 <Paper elevation={3} sx={{ p: 2 }}>
-                    {/* Informations sur l'ordinateur */}
                     <Box sx={{ mb: 2 }}>
                         <Typography variant="h6" gutterBottom>
                             {selectedComputer.name}
@@ -195,82 +196,39 @@ const ComputerLoanHistoryPage = () => {
 
                         {stats && (
                             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}>
-                                    <Typography variant="caption" color="text.secondary">Total prêts</Typography>
-                                    <Typography variant="h5">{stats.totalLoans}</Typography>
-                                </Paper>
-                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}>
-                                    <Typography variant="caption" color="text.secondary">Retournés</Typography>
-                                    <Typography variant="h5">{stats.returned}</Typography>
-                                </Paper>
-                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}>
-                                    <Typography variant="caption" color="text.secondary">En cours</Typography>
-                                    <Typography variant="h5">{stats.active}</Typography>
-                                </Paper>
-                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}>
-                                    <Typography variant="caption" color="text.secondary">Durée moyenne</Typography>
-                                    <Typography variant="h5">{stats.averageDays}j</Typography>
-                                </Paper>
+                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}><Typography variant="caption" color="text.secondary">Total prêts</Typography><Typography variant="h5">{stats.totalLoans}</Typography></Paper>
+                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}><Typography variant="caption" color="text.secondary">Retournés</Typography><Typography variant="h5">{stats.returned}</Typography></Paper>
+                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}><Typography variant="caption" color="text.secondary">En cours</Typography><Typography variant="h5">{stats.active}</Typography></Paper>
+                                <Paper elevation={1} sx={{ p: 1.5, flex: '1 1 150px' }}><Typography variant="caption" color="text.secondary">Durée moyenne</Typography><Typography variant="h5">{stats.averageDays}j</Typography></Paper>
                             </Box>
                         )}
                     </Box>
 
-                    {/* Historique */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                         <HistoryIcon />
                         <Typography variant="h6">Historique complet</Typography>
                     </Box>
 
                     {historyLoading ? (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                            <CircularProgress />
-                        </Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
                     ) : history.length === 0 ? (
-                        <Alert severity="info">
-                            Aucun historique de prêt pour cet ordinateur
-                        </Alert>
+                        <Alert severity="info">Aucun historique de prêt pour cet ordinateur</Alert>
                     ) : (
                         <TableContainer>
                             <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Type</TableCell>
-                                        <TableCell>Utilisateur</TableCell>
-                                        <TableCell>Date événement</TableCell>
-                                        <TableCell>Date prêt</TableCell>
-                                        <TableCell>Retour prévu</TableCell>
-                                        <TableCell>Retour effectif</TableCell>
-                                        <TableCell>Par</TableCell>
-                                    </TableRow>
-                                </TableHead>
+                                <TableHead><TableRow><TableCell>Type</TableCell><TableCell>Utilisateur</TableCell><TableCell>Date événement</TableCell><TableCell>Date prêt</TableCell><TableCell>Retour prévu</TableCell><TableCell>Retour effectif</TableCell><TableCell>Par</TableCell></TableRow></TableHead>
                                 <TableBody>
                                     {history.map((event) => {
                                         const config = eventConfig[event.eventType] || {};
                                         return (
                                             <TableRow key={event.id}>
-                                                <TableCell>
-                                                    <Chip
-                                                        icon={config.icon}
-                                                        label={config.label || event.eventType}
-                                                        color={config.color || 'default'}
-                                                        size="small"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Typography variant="body2">
-                                                        {event.userDisplayName || event.details?.userName || '-'}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        {event.userName || event.details?.username || ''}
-                                                    </Typography>
-                                                </TableCell>
+                                                <TableCell><Chip icon={config.icon} label={config.label || event.eventType} color={config.color || 'default'} size="small" /></TableCell>
+                                                <TableCell><Typography variant="body2">{event.userDisplayName || event.details?.userName || '-'}</Typography><Typography variant="caption" color="text.secondary">{event.userName || event.details?.username || ''}</Typography></TableCell>
                                                 <TableCell>{formatDate(event.date)}</TableCell>
                                                 <TableCell>{formatDate(event.details?.loanDate)}</TableCell>
                                                 <TableCell>{formatDate(event.details?.expectedReturnDate)}</TableCell>
                                                 <TableCell>{formatDate(event.details?.actualReturnDate)}</TableCell>
-                                                <TableCell>
-                                                    <Typography variant="caption">{event.by || '-'}</Typography>
-                                                </TableCell>
+                                                <TableCell><Typography variant="caption">{event.by || '-'}</Typography></TableCell>
                                             </TableRow>
                                         );
                                     })}

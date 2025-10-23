@@ -1,4 +1,4 @@
-// electron/services/databaseService.js - NOUVEAU SERVICE CENTRAL DE BASE DE DONNÉES
+// backend/services/databaseService.js - SERVICE CENTRAL DE BASE DE DONNÉES COMPLET
 
 const path = require('path');
 const Database = require('better-sqlite3');
@@ -8,7 +8,6 @@ const fs = require('fs');
 let db;
 
 // Schéma SQL complet qui définit la structure de toute l'application.
-// Remplace tous les anciens fichiers .json.
 const schema = `
     -- Configuration initiale pour la robustesse et la performance
     PRAGMA foreign_keys = ON;      -- Active la vérification des clés étrangères
@@ -134,13 +133,8 @@ const schema = `
         lastActivity TEXT
     );
 
-    -- Table clé-valeur générique pour les paramètres (ex: loan_settings)
-    CREATE TABLE IF NOT EXISTS key_value_store (
-        key TEXT PRIMARY KEY,
-        value TEXT
-    );
-	
-CREATE TABLE IF NOT EXISTS rds_sessions (
+    -- Table pour les sessions RDS
+    CREATE TABLE IF NOT EXISTS rds_sessions (
         id TEXT PRIMARY KEY, -- Composite key: server-sessionId
         server TEXT NOT NULL,
         sessionId TEXT NOT NULL,
@@ -153,6 +147,7 @@ CREATE TABLE IF NOT EXISTS rds_sessions (
         lastUpdate TEXT NOT NULL
     );
 
+    -- Table clé-valeur générique pour les paramètres (ex: loan_settings)
     CREATE TABLE IF NOT EXISTS key_value_store (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -165,7 +160,9 @@ CREATE TABLE IF NOT EXISTS rds_sessions (
 function connect() {
     if (db) return;
 
-    const dbPath = configService.appConfig.databasePath || path.join(path.dirname(configService.appConfig.defaultExcelPath), 'rds_viewer_data.sqlite');
+    const dbPath = configService.appConfig.databasePath || 
+                   path.join(path.dirname(configService.appConfig.defaultExcelPath), 'rds_viewer_data.sqlite');
+    
     const dbExists = fs.existsSync(dbPath);
 
     try {
@@ -214,14 +211,22 @@ function initializeDefaultData() {
 
         // Accessoires par défaut
         const accessories = [
-            { id: 'charger', name: 'Chargeur', icon: 'power' }, { id: 'mouse', name: 'Souris', icon: 'mouse' },
-            { id: 'bag', name: 'Sacoche', icon: 'work' }, { id: 'docking_station', name: 'Station d\'accueil', icon: 'dock' }
+            { id: 'charger', name: 'Chargeur', icon: 'power' }, 
+            { id: 'mouse', name: 'Souris', icon: 'mouse' },
+            { id: 'bag', name: 'Sacoche', icon: 'work' }, 
+            { id: 'docking_station', name: 'Station d\'accueil', icon: 'dock' }
         ];
         const insertAccessory = db.prepare('INSERT OR IGNORE INTO accessories (id, name, icon, active, createdAt, createdBy) VALUES (?, ?, ?, 1, ?, ?)');
         accessories.forEach(a => insertAccessory.run(a.id, a.name, a.icon, now, 'system'));
 
         // Paramètres de prêt par défaut
-        const defaultSettings = { maxLoanDays: 90, maxExtensions: 3, reminderDaysBefore: [7, 3, 1], overdueReminderDays: [1, 3, 7], autoNotifications: true };
+        const defaultSettings = { 
+            maxLoanDays: 90, 
+            maxExtensions: 3, 
+            reminderDaysBefore: [7, 3, 1], 
+            overdueReminderDays: [1, 3, 7], 
+            autoNotifications: true 
+        };
         db.prepare('INSERT OR IGNORE INTO key_value_store (key, value) VALUES (?, ?)').run('loan_settings', JSON.stringify(defaultSettings));
     });
     transaction();
@@ -287,10 +292,70 @@ function all(sql, params = []) {
     }
 }
 
+/**
+ * Prépare une requête SQL pour une exécution ultérieure.
+ * IMPORTANT: Cette méthode est nécessaire pour les transactions et requêtes paramétrées.
+ * @param {string} sql La requête SQL à préparer.
+ * @returns {Statement} Un objet Statement de better-sqlite3.
+ */
+function prepare(sql) {
+    connect();
+    try {
+        return db.prepare(sql);
+    } catch (error) {
+        console.error(`Erreur SQL (prepare) sur "${sql}":`, error);
+        throw error;
+    }
+}
+
+/**
+ * Crée une fonction de transaction.
+ * IMPORTANT: Cette méthode est nécessaire pour exécuter plusieurs requêtes de manière atomique.
+ * @param {Function} fn La fonction contenant les opérations de la transaction.
+ * @returns {Function} Une fonction qui exécute la transaction.
+ */
+function transaction(fn) {
+    connect();
+    try {
+        return db.transaction(fn);
+    } catch (error) {
+        console.error("Erreur création transaction:", error);
+        throw error;
+    }
+}
+
+/**
+ * Exécute une requête SQL brute (pour les cas particuliers).
+ * @param {string} sql La ou les requêtes SQL à exécuter.
+ */
+function exec(sql) {
+    connect();
+    try {
+        return db.exec(sql);
+    } catch (error) {
+        console.error(`Erreur SQL (exec):`, error);
+        throw error;
+    }
+}
+
+/**
+ * Obtient une référence à la connexion db pour des opérations avancées.
+ * ATTENTION: À utiliser avec précaution.
+ * @returns {Database} L'instance de connexion better-sqlite3.
+ */
+function getConnection() {
+    connect();
+    return db;
+}
+
 module.exports = {
     connect,
     close,
     run,
     get,
     all,
+    prepare,      // ✅ AJOUT CRITIQUE
+    transaction,  // ✅ AJOUT CRITIQUE
+    exec,         // ✅ AJOUT POUR COMPATIBILITÉ
+    getConnection // ✅ AJOUT POUR CAS AVANCÉS
 };

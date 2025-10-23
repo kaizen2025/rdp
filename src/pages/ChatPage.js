@@ -1,12 +1,15 @@
-// src/pages/ChatPage.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
+// src/pages/ChatPage.js - VERSION FINALE AVEC CORRECTION DRAGGABLE ET ESLINT
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import Draggable from 'react-draggable';
 import {
-    Box, Paper, Typography, TextField, IconButton, Button, Avatar, ListItemText, ListItemAvatar,
-    ListItemButton, Divider, Menu, MenuItem, Dialog, DialogTitle, DialogContent, DialogActions,
-    CircularProgress, ListSubheader, Stack, Chip, Popover, ListItemIcon
+    Box, Paper, Typography, TextField, IconButton, Button, Avatar, List,
+    ListItemText, ListItemAvatar, ListItemButton, Divider, Menu, MenuItem, Dialog,
+    DialogTitle, DialogContent, DialogActions, CircularProgress, ListSubheader,
+    Stack, Chip, Popover, ListItemIcon, Badge, Tooltip
 } from '@mui/material';
+
+// Icons
 import SendIcon from '@mui/icons-material/Send';
 import AddIcon from '@mui/icons-material/Add';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -16,20 +19,24 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
 import CloseIcon from '@mui/icons-material/Close';
 import DescriptionIcon from '@mui/icons-material/Description';
+import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 import EmojiPicker from 'emoji-picker-react';
 
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/apiService';
+import { getDmChannelKey } from '../utils/chatUtils';
 
 const EMOJI_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
-function PaperComponent(props) {
+const DraggablePaper = (props) => {
+    const nodeRef = React.useRef(null);
     return (
-        <Draggable handle="#draggable-dialog-title" cancel={'[class*="MuiDialogContent-root"]'}>
-            <Paper {...props} />
+        <Draggable nodeRef={nodeRef} handle="#draggable-dialog-title" cancel={'[class*="MuiDialogContent-root"]'}>
+            <Paper ref={nodeRef} {...props} />
         </Draggable>
     );
-}
+};
 
 const AddChannelDialog = ({ open, onClose, onSave }) => {
     const [name, setName] = useState('');
@@ -40,6 +47,7 @@ const AddChannelDialog = ({ open, onClose, onSave }) => {
         onSave({ name, description });
         setName('');
         setDescription('');
+        onClose();
     };
     
     return (
@@ -58,179 +66,120 @@ const AddChannelDialog = ({ open, onClose, onSave }) => {
 };
 
 const MessageItem = memo(({ message, isFirstInGroup, currentUser, onEdit, onDelete, onReact }) => {
+    const { config } = useApp();
     const [isHovered, setIsHovered] = useState(false);
     const [menuAnchor, setMenuAnchor] = useState(null);
     const [reactionAnchor, setReactionAnchor] = useState(null);
     const isOwn = message.authorId === currentUser?.id;
+    const allTechnicians = config?.it_technicians || [];
+    const getReactionAuthors = (users) => users.map(uid => allTechnicians.find(t => t.id === uid)?.name || uid).join(', ');
 
     return (
-        <Box onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} sx={{ display: 'flex', px: 2, py: isFirstInGroup ? 1.5 : 0.2, '&:hover': { bgcolor: 'action.hover' } }}>
+        <Box 
+            onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)} 
+            sx={{ display: 'flex', px: 2, py: isFirstInGroup ? 1.5 : 0.2, '&:hover': { bgcolor: 'action.hover' }, position: 'relative' }}
+            onDoubleClick={() => isOwn && onEdit(message)}
+        >
             {isFirstInGroup ? <Avatar sx={{ width: 36, height: 36, mr: 2, mt: 0.5 }}>{message.authorAvatar}</Avatar> : <Box sx={{ width: 36, mr: 2 }} />}
-            <Box sx={{ flex: 1, position: 'relative' }}>
-                {isFirstInGroup && (
-                    <Stack direction="row" alignItems="baseline" spacing={1}>
-                        <Typography variant="subtitle2" component="span" sx={{ fontWeight: 'bold' }}>{message.authorName}</Typography>
-                        <Typography variant="caption" color="text.secondary">{new Date(message.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Typography>
-                    </Stack>
-                )}
-                <Paper elevation={0} sx={{ p: 1, bgcolor: 'transparent' }}>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {message.text}
-                        {message.edited && <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>(modifié)</Typography>}
-                    </Typography>
-                    {message.file && <Chip icon={<DescriptionIcon />} label={message.file.name} size="small" variant="outlined" sx={{ mt: 1 }} />}
-                </Paper>
-                {message.reactions && Object.keys(message.reactions).length > 0 && (
-                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>
-                        {Object.entries(message.reactions).map(([emoji, users]) => users.length > 0 && (
-                            <Chip key={emoji} label={`${emoji} ${users.length}`} size="small" variant={users.includes(currentUser?.id) ? 'filled' : 'outlined'} onClick={() => onReact(message.id, emoji)} />
-                        ))}
-                    </Stack>
-                )}
-                {isHovered && (
-                    <Paper sx={{ position: 'absolute', top: -12, right: 0, display: 'flex', gap: 0.5 }}>
-                        <IconButton size="small" onClick={(e) => setReactionAnchor(e.currentTarget)}><AddReactionIcon fontSize="small" /></IconButton>
-                        {isOwn && <IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)}><MoreVertIcon fontSize="small" /></IconButton>}
-                    </Paper>
-                )}
-                <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-                    <MenuItem onClick={() => { onEdit(message); setMenuAnchor(null); }}><ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>Modifier</MenuItem>
-                    <MenuItem onClick={() => { onDelete(message.id); setMenuAnchor(null); }}><ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>Supprimer</MenuItem>
-                </Menu>
-                <Popover open={Boolean(reactionAnchor)} anchorEl={reactionAnchor} onClose={() => setReactionAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-                    <Stack direction="row" sx={{ p: 0.5 }}>
-                        {EMOJI_REACTIONS.map(emoji => <IconButton key={emoji} onClick={() => { onReact(message.id, emoji); setReactionAnchor(null); }}>{emoji}</IconButton>)}
-                    </Stack>
-                </Popover>
+            <Box sx={{ flex: 1 }}>
+                {isFirstInGroup && <Stack direction="row" alignItems="baseline" spacing={1}><Typography variant="subtitle2" component="span" sx={{ fontWeight: 'bold' }}>{message.authorName}</Typography><Typography variant="caption" color="text.secondary">{new Date(message.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</Typography></Stack>}
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', mt: isFirstInGroup ? 0 : -0.5 }}>
+                    {message.text}{message.edited && <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>(modifié)</Typography>}
+                </Typography>
+                {message.file_info && <Chip icon={<DescriptionIcon />} label={message.file_info.name} size="small" variant="outlined" sx={{ mt: 1 }} />}
+                {message.reactions && Object.keys(message.reactions).length > 0 && <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }}>{Object.entries(message.reactions).filter(([key]) => key !== 'edited').map(([emoji, users]) => users.length > 0 && <Tooltip key={emoji} title={getReactionAuthors(users)}><Chip label={`${emoji} ${users.length}`} size="small" variant={users.includes(currentUser?.id) ? 'filled' : 'outlined'} onClick={() => onReact(message.id, emoji)} sx={{ cursor: 'pointer' }} /></Tooltip>)}</Stack>}
+                {isHovered && <Paper sx={{ position: 'absolute', top: -16, right: 8, display: 'flex', gap: 0.2, borderRadius: 2 }}><Tooltip title="Réagir"><IconButton size="small" onClick={(e) => setReactionAnchor(e.currentTarget)}><AddReactionIcon sx={{fontSize: 18}} /></IconButton></Tooltip>{isOwn && <Tooltip title="Plus d'options"><IconButton size="small" onClick={(e) => setMenuAnchor(e.currentTarget)}><MoreVertIcon sx={{fontSize: 18}} /></IconButton></Tooltip>}</Paper>}
+                <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}><MenuItem onClick={() => { onEdit(message); setMenuAnchor(null); }}><ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>Modifier</MenuItem><MenuItem onClick={() => { onDelete(message.id); setMenuAnchor(null); }}><ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>Supprimer</MenuItem></Menu>
+                <Popover open={Boolean(reactionAnchor)} anchorEl={reactionAnchor} onClose={() => setReactionAnchor(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Stack direction="row" sx={{ p: 0.5 }}>{EMOJI_REACTIONS.map(emoji => <IconButton key={emoji} onClick={() => { onReact(message.id, emoji); setReactionAnchor(null); }}>{emoji}</IconButton>)}</Stack></Popover>
             </Box>
         </Box>
     );
 });
 
-const DateDivider = ({ date }) => {
+const DateDivider = memo(({ date }) => {
     const formatDate = () => {
-        const today = new Date();
-        const yesterday = new Date();
-        yesterday.setDate(today.getDate() - 1);
-        const messageDate = new Date(date);
+        const today = new Date(); const yesterday = new Date(); yesterday.setDate(today.getDate() - 1); const messageDate = new Date(date);
         if (today.toDateString() === messageDate.toDateString()) return 'AUJOURD\'HUI';
         if (yesterday.toDateString() === messageDate.toDateString()) return 'HIER';
         return messageDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
     };
     return <Divider sx={{ my: 2 }}><Chip label={formatDate()} size="small" /></Divider>;
-};
+});
 
 const ChatDialog = ({ open, onClose, onlineTechnicians = [] }) => {
-    const { currentTechnician, showNotification, events } = useApp();
+    const { currentTechnician, showNotification, events, config } = useApp();
     const [currentChannel, setCurrentChannel] = useState('general');
     const [channels, setChannels] = useState([]);
     const [technicians, setTechnicians] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
+    const [editingMessage, setEditingMessage] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSending, setIsSending] = useState(false);
+    const [addChannelOpen, setAddChannelOpen] = useState(false);
+    const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+    const emojiPickerAnchor = useRef(null);
     const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
 
-    const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-
-    const loadInitialData = useCallback(async () => {
-        try {
-            const [channelsData, configData] = await Promise.all([
-                apiService.getChatChannels(),
-                apiService.getConfig()
-            ]);
-            setChannels(channelsData || []);
-            setTechnicians(configData.it_technicians || []);
-        } catch (error) {
-            console.error('Erreur chargement données chat:', error);
-            showNotification('error', 'Impossible de charger les canaux de discussion.');
-        }
-    }, [showNotification]);
-
-    const loadMessages = useCallback(async (channelId) => {
-        if (!currentTechnician?.id) return;
-        setIsLoading(true);
-        try {
-            const msgs = await apiService.getChatMessages(channelId);
-            setMessages(msgs || []);
-        } catch (error) {
-            console.error('Erreur chargement messages:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [currentTechnician]);
-
-    useEffect(() => {
-        if (open) {
-            loadInitialData();
-        }
-    }, [open, loadInitialData]);
-
-    useEffect(() => {
-        if (open && currentChannel) {
-            loadMessages(currentChannel);
-        }
-        // S'abonner aux nouveaux messages pour ce canal
-        const unsubscribe = events.on('chat_message_new', (payload) => {
-            if (payload.channelId === currentChannel) {
-                loadMessages(currentChannel);
-            }
-        });
-        return unsubscribe;
-    }, [open, currentChannel, events, loadMessages]);
-
-    useEffect(() => {
-        scrollToBottom();
-    }, [messages]);
-
-    const handleSendMessage = async () => {
-        if (!newMessage.trim()) return;
-        try {
-            await apiService.sendChatMessage(currentChannel, newMessage);
-            setNewMessage('');
-            // Pas besoin de recharger, le WebSocket va notifier
-        } catch (error) {
-            showNotification('error', `Erreur envoi: ${error.message}`);
-        }
-    };
-
-    const currentTargetName = useMemo(() => {
-        return channels.find(c => c.id === currentChannel)?.name || 'Canal';
-    }, [currentChannel, channels]);
+    const scrollToBottom = useCallback((behavior = 'auto') => { messagesEndRef.current?.scrollIntoView({ behavior }); }, []);
+    const loadData = useCallback(async () => { try { const channelsData = await apiService.getChatChannels(); setChannels(channelsData || []); setTechnicians(config.it_technicians || []); } catch (error) { showNotification('error', 'Impossible de charger les données du chat.'); } }, [showNotification, config]);
+    const loadMessages = useCallback(async (channelId) => { if (!channelId || !currentTechnician?.id) return; setIsLoading(true); try { const msgs = await apiService.getChatMessages(channelId); setMessages(msgs || []); } catch (error) { showNotification('error', `Erreur chargement messages: ${error.message}`); } finally { setIsLoading(false); } }, [currentTechnician, showNotification]);
+    useEffect(() => { if (open) loadData(); }, [open, loadData]);
+    useEffect(() => { if (open && currentChannel) loadMessages(currentChannel); }, [open, currentChannel, loadMessages]);
+    useEffect(() => { const handleNewMessage = (msg) => { if (msg.channelId === currentChannel) setMessages(prev => [...prev, msg]); }; const handleUpdate = () => loadMessages(currentChannel); const unsubNew = events.on('chat_message_new', handleNewMessage); const unsubUpdate = events.on('chat_message_updated', handleUpdate); const unsubDelete = events.on('chat_message_deleted', handleUpdate); const unsubReaction = events.on('chat_reaction_toggled', handleUpdate); const unsubChannels = events.on('data_updated:chat_channels', loadData); return () => { unsubNew(); unsubUpdate(); unsubDelete(); unsubReaction(); unsubChannels(); }; }, [currentChannel, events, loadMessages, loadData]);
+    useEffect(() => { if (!isLoading) scrollToBottom('auto'); }, [isLoading, scrollToBottom]);
+    useEffect(() => { if (!isSending) scrollToBottom('smooth'); }, [messages, isSending, scrollToBottom]);
+    const handleSendMessage = async () => { if (!newMessage.trim() || isSending) return; setIsSending(true); const originalMessage = newMessage; setNewMessage(''); try { if (editingMessage) { await apiService.editChatMessage(editingMessage.id, currentChannel, originalMessage); setEditingMessage(null); } else { await apiService.sendChatMessage(currentChannel, originalMessage); } } catch (error) { showNotification('error', `Erreur: ${error.message}`); setNewMessage(originalMessage); } finally { setIsSending(false); } };
+    const handleAddChannel = async ({ name, description }) => { try { await apiService.addChatChannel(name, description); showNotification('success', `Canal "${name}" créé.`); loadData(); } catch (error) { showNotification('error', `Erreur: ${error.message}`); } };
+    const handleEditMessage = (message) => { setEditingMessage(message); setNewMessage(message.text); };
+    const handleDeleteMessage = async (messageId) => { if (!window.confirm("Supprimer ce message ?")) return; try { await apiService.deleteChatMessage(messageId, currentChannel); } catch (error) { showNotification('error', `Erreur: ${error.message}`); } };
+    const handleReaction = async (messageId, emoji) => { try { await apiService.toggleChatReaction(messageId, currentChannel, emoji); } catch (error) { showNotification('error', `Erreur: ${error.message}`); } };
+    const handleFileSelect = (e) => { if (e.target.files[0]) showNotification('info', `Envoi de fichier non implémenté. Fichier: ${e.target.files[0].name}`); };
+    const currentTargetName = useMemo(() => { if (currentChannel.startsWith('dm--')) { const otherUserId = currentChannel.split('--').find(id => id !== currentTechnician?.id); return technicians.find(t => t.id === otherUserId)?.name || 'Message Privé'; } return channels.find(c => c.id === currentChannel)?.name || 'Canal'; }, [currentChannel, channels, technicians, currentTechnician]);
+    const onlineIds = useMemo(() => new Set(onlineTechnicians.map(t => t.id)), [onlineTechnicians]);
 
     return (
-        <Dialog open={open} onClose={onClose} PaperComponent={DraggablePaper} maxWidth="lg" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
-            <DialogTitle sx={{ cursor: 'move' }} id="draggable-dialog-title">
-                Chat Équipe IT
-                <IconButton onClick={onClose} sx={{ position: 'absolute', right: 8, top: 8 }}><CloseIcon /></IconButton>
-            </DialogTitle>
-            <DialogContent dividers sx={{ p: 0, display: 'flex' }}>
-                {/* ... (JSX du Sidebar du Chat) ... */}
-                <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                    <Box sx={{ flexGrow: 1, overflow: 'auto' }}>
-                        {isLoading ? <CircularProgress /> : messages.map((msg, index) => (
-                            <div key={msg.id}> {/* Remplacer par le vrai composant MessageItem */}
-                                <p><b>{msg.authorName}:</b> {msg.text}</p>
-                            </div>
-                        ))}
+        <Dialog open={open} onClose={onClose} PaperComponent={DraggablePaper} maxWidth="lg" PaperProps={{ sx: { height: '80vh', width: '80vw' } }}>
+            <DialogTitle sx={{ cursor: 'move', m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} id="draggable-dialog-title"><Typography variant="h6">Chat Équipe IT</Typography><IconButton onClick={onClose}><CloseIcon /></IconButton></DialogTitle>
+            <DialogContent dividers sx={{ p: 0, display: 'flex', overflow: 'hidden' }}>
+                <Box sx={{ width: 260, borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column', bgcolor: 'grey.100' }}>
+                    <Box sx={{ flex: 1, overflowY: 'auto' }}>
+                        <ListSubheader sx={{ bgcolor: 'grey.100' }}>Canaux <IconButton size="small" onClick={() => setAddChannelOpen(true)}><AddIcon fontSize="small" /></IconButton></ListSubheader>
+                        <List dense>{channels.map(c => <ListItemButton key={c.id} selected={currentChannel === c.id} onClick={() => setCurrentChannel(c.id)}><ListItemIcon sx={{ minWidth: 32 }}><TagIcon fontSize="small" /></ListItemIcon><ListItemText primary={c.name} /></ListItemButton>)}</List>
+                        <ListSubheader sx={{ bgcolor: 'grey.100' }}>Messages Privés</ListSubheader>
+                        <List dense>{technicians.filter(t => t.id !== currentTechnician?.id).map(t => { const dmId = getDmChannelKey(currentTechnician?.id, t.id); const isOnline = onlineIds.has(t.id); return <ListItemButton key={t.id} selected={currentChannel === dmId} onClick={() => setCurrentChannel(dmId)}><ListItemAvatar sx={{ minWidth: 36 }}><Badge color="success" variant="dot" invisible={!isOnline} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}><Avatar sx={{ width: 24, height: 24 }}>{t.avatar}</Avatar></Badge></ListItemAvatar><ListItemText primary={t.name} /></ListItemButton>; })}</List>
+                    </Box>
+                </Box>
+                <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
+                    <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}><Typography variant="h6">{currentChannel.startsWith('dm--') ? '' : '#'}{currentTargetName}</Typography></Box>
+                    <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1 }}>
+                        {isLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box> :
+                         messages.length === 0 ? <Typography sx={{ textAlign: 'center', p: 4, color: 'text.secondary' }}>C'est le début de votre conversation. Dites bonjour !</Typography> :
+                         messages.map((msg, index) => {
+                            const prevMsg = messages[index - 1];
+                            const isFirstInGroup = !prevMsg || prevMsg.authorId !== msg.authorId || (new Date(msg.timestamp) - new Date(prevMsg.timestamp)) > 5 * 60 * 1000;
+                            const showDateDivider = !prevMsg || new Date(msg.timestamp).toDateString() !== new Date(prevMsg.timestamp).toDateString();
+                            return (<React.Fragment key={msg.id}>{showDateDivider && <DateDivider date={msg.timestamp} />}<MessageItem message={msg} isFirstInGroup={isFirstInGroup} currentUser={currentTechnician} onEdit={handleEditMessage} onDelete={handleDeleteMessage} onReact={handleReaction} /></React.Fragment>);
+                         })}
                         <div ref={messagesEndRef} />
                     </Box>
-                    <Paper elevation={3} sx={{ p: 2 }}>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                            <TextField fullWidth multiline maxRows={4} placeholder={`Message pour #${currentTargetName}`} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
-                            <Button variant="contained" onClick={handleSendMessage}>Envoyer</Button>
+                    <Paper elevation={3} sx={{ p: 1, m: 2, borderRadius: 2 }}>
+                        {editingMessage && <Box sx={{ p: 1, mb: 1, bgcolor: 'warning.lighter', borderRadius: 1, display: 'flex', justifyContent: 'space-between' }}><Typography variant="caption">Modification...</Typography><IconButton size="small" onClick={() => { setEditingMessage(null); setNewMessage('') }}><CloseIcon fontSize="small" /></IconButton></Box>}
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} style={{ display: 'none' }} />
+                            <Tooltip title="Joindre un fichier"><IconButton onClick={() => fileInputRef.current.click()}><AttachFileIcon /></IconButton></Tooltip>
+                            <Tooltip title="Ajouter un emoji"><IconButton ref={emojiPickerAnchor} onClick={() => setEmojiPickerOpen(true)}><EmojiEmotionsIcon /></IconButton></Tooltip>
+                            <TextField fullWidth multiline maxRows={5} placeholder={`Message pour ${currentTargetName}`} variant="standard" InputProps={{ disableUnderline: true }} value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }} />
+                            <IconButton color="primary" onClick={handleSendMessage} disabled={isSending || !newMessage.trim()}><SendIcon /></IconButton>
                         </Box>
                     </Paper>
                 </Box>
             </DialogContent>
+            <Popover open={emojiPickerOpen} anchorEl={emojiPickerAnchor.current} onClose={() => setEmojiPickerOpen(false)} anchorOrigin={{ vertical: 'top', horizontal: 'left' }} transformOrigin={{ vertical: 'bottom', horizontal: 'left' }}><EmojiPicker onEmojiClick={(e) => setNewMessage(p => p + e.emoji)} /></Popover>
+            <AddChannelDialog open={addChannelOpen} onClose={() => setAddChannelOpen(false)} onSave={handleAddChannel} />
         </Dialog>
     );
 };
-
-// Helper pour Draggable Dialog
-const DraggablePaper = (props) => (
-    <Draggable handle="#draggable-dialog-title" cancel={'[class*="MuiDialogContent-root"]'}>
-        <Paper {...props} />
-    </Draggable>
-);
 
 export default ChatDialog;

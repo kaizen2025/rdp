@@ -1,133 +1,118 @@
-// src/contexts/AppContext.js - VERSION COMPLÈTE AVEC WEBSOCKET POUR LE TEMPS RÉEL
+// src/contexts/AppContext.js - VERSION CORRIGÉE POUR WEBSOCKET ET STRICT MODE
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import apiService from '../services/apiService'; // Import du nouveau service API
+import apiService from '../services/apiService'; 
 
 const AppContext = createContext();
 
 export const useApp = () => useContext(AppContext);
 
-// --- CONFIGURATION WEBSOCKET ---
 const WS_URL = process.env.NODE_ENV === 'development'
   ? 'ws://localhost:3003'
-  : 'ws://192.168.1.232:3003'; // Remplacez par l'IP de votre serveur de production
+  : `ws://${window.location.hostname}:3003`;
 
 export const AppProvider = ({ children }) => {
     const [config, setConfig] = useState(null);
-    const [currentTechnician, setCurrentTechnician] = useState(null); // Sera géré par un contexte d'authentification plus tard
+    const [currentTechnician, setCurrentTechnician] = useState(null); 
     const [isInitializing, setIsInitializing] = useState(true);
     const [error, setError] = useState('');
     const [notifications, setNotifications] = useState([]);
-    const [isOnline, setIsOnline] = useState(true); // Statut de la connexion au backend
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    
+    const wsRef = useRef(null);
+    const reconnectTimeoutRef = useRef(null);
+    const initialized = useRef(false); // **CORRECTION POUR STRICT MODE**
 
-    // --- SYSTÈME D'ÉVÉNEMENTS INTERNE ---
-    const eventListeners = useRef({});
+    const eventListeners = useRef(new Map());
 
-    const on = useCallback((eventName, callback) => {
-        if (!eventListeners.current[eventName]) {
-            eventListeners.current[eventName] = [];
-        }
-        eventListeners.current[eventName].push(callback);
-        // Retourne une fonction pour se désabonner
-        return () => {
-            off(eventName, callback);
-        };
+    const showNotification = useCallback((type, message) => {
+        const newNotification = { id: Date.now() + Math.random(), type, message };
+        setNotifications(prev => [...prev, newNotification]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+        }, 5000);
     }, []);
 
     const off = useCallback((eventName, callback) => {
-        if (eventListeners.current[eventName]) {
-            eventListeners.current[eventName] = eventListeners.current[eventName].filter(
-                (cb) => cb !== callback
-            );
+        if (eventListeners.current.has(eventName)) {
+            eventListeners.current.get(eventName).delete(callback);
         }
     }, []);
 
+    const on = useCallback((eventName, callback) => {
+        if (!eventListeners.current.has(eventName)) {
+            eventListeners.current.set(eventName, new Set());
+        }
+        eventListeners.current.get(eventName).add(callback);
+        return () => off(eventName, callback);
+    }, [off]);
+
     const emit = useCallback((eventName, data) => {
-        if (eventListeners.current[eventName]) {
-            eventListeners.current[eventName].forEach((callback) => {
+        if (eventListeners.current.has(eventName)) {
+            eventListeners.current.get(eventName).forEach((callback) => {
                 try {
                     callback(data);
                 } catch (e) {
-                    console.error(`Erreur dans un listener d'événement pour ${eventName}:`, e);
+                    console.error(`Erreur dans un listener pour l'événement '${eventName}':`, e);
                 }
             });
         }
     }, []);
-
-    // --- GESTION DE LA CONNEXION WEBSOCKET ---
-    useEffect(() => {
-        let ws;
-        let reconnectInterval;
-
-        function connect() {
-            ws = new WebSocket(WS_URL);
-
-            ws.onopen = () => {
-                console.log('✅ WebSocket connecté au serveur.');
-                setIsOnline(true);
-                showNotification('success', 'Connecté au serveur en temps réel.');
-                if (reconnectInterval) {
-                    clearInterval(reconnectInterval);
-                    reconnectInterval = null;
-                }
-            };
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log('WebSocket Message Reçu:', data);
-
-                    // Émettre un événement global basé sur le type de message
-                    if (data.type === 'data_updated' && data.payload?.entity) {
-                        // Événement spécifique (ex: 'data_updated:loans')
-                        emit(`data_updated:${data.payload.entity}`, data.payload);
-                        // Événement générique
-                        emit('data_updated', data.payload);
-                    } else {
-                        emit(data.type, data.payload);
-                    }
-                } catch (e) {
-                    console.error('Erreur parsing message WebSocket:', e);
-                }
-            };
-
-            ws.onclose = () => {
-                console.warn('🔌 WebSocket déconnecté. Tentative de reconnexion...');
-                setIsOnline(false);
-                if (!reconnectInterval) {
-                    reconnectInterval = setInterval(() => {
-                        connect();
-                    }, 5000); // Tente de se reconnecter toutes les 5 secondes
-                }
-            };
-
-            ws.onerror = (error) => {
-                console.error('❌ Erreur WebSocket:', error);
-                ws.close(); // Déclenchera l'événement onclose et la tentative de reconnexion
-            };
+    
+    const connectWebSocket = useCallback(() => {
+        if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+            return;
         }
 
-        connect();
+        wsRef.current = new WebSocket(WS_URL);
+        const ws = wsRef.current;
 
-        // Nettoyage à la fermeture du composant
-        return () => {
-            if (reconnectInterval) clearInterval(reconnectInterval);
-            if (ws) ws.close();
+        ws.onopen = () => {
+            console.log('✅ WebSocket connecté au serveur.');
+            setIsOnline(true);
+            showNotification('success', 'Connecté au serveur en temps réel.');
+            clearTimeout(reconnectTimeoutRef.current);
         };
-    }, [emit]); // Dépendance à 'emit' pour que le système d'événements soit prêt
 
-    // --- CHARGEMENT INITIAL ---
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket Message Reçu:', data);
+                if (data.type === 'data_updated' && data.payload?.entity) {
+                    emit(`data_updated:${data.payload.entity}`, data.payload);
+                    emit('data_updated', data.payload);
+                } else {
+                    emit(data.type, data.payload);
+                }
+            } catch (e) {
+                console.error('Erreur parsing message WebSocket:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            console.warn('🔌 WebSocket déconnecté. Tentative de reconnexion dans 5s...');
+            setIsOnline(false);
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
+        };
+
+        ws.onerror = (error) => {
+            // L'erreur est souvent non descriptive, onclose gère la reconnexion
+            console.error('❌ Erreur WebSocket.');
+            ws.close();
+        };
+    }, [emit, showNotification]);
+
     useEffect(() => {
+        // **CORRECTION POUR STRICT MODE** : On s'assure que l'initialisation ne se fait qu'une fois
+        if (initialized.current) return;
+        initialized.current = true;
+
         const initializeApp = async () => {
             try {
-                // Remplacer l'appel Electron par un appel API
                 const loadedConfig = await apiService.getConfig();
                 setConfig(loadedConfig);
-                
-                // Simuler la connexion d'un technicien
-                // TODO: Remplacer par un vrai flux de login
-                setCurrentTechnician(loadedConfig.it_technicians[0]);
-
+                connectWebSocket(); // Démarrer le WebSocket après avoir chargé la config
             } catch (err) {
                 console.error('Erreur initialisation App:', err);
                 setError(`Impossible de charger la configuration depuis le serveur: ${err.message}`);
@@ -136,27 +121,24 @@ export const AppProvider = ({ children }) => {
                 setIsInitializing(false);
             }
         };
+
         initializeApp();
-    }, []);
 
-    // --- GESTION DES NOTIFICATIONS (Snackbar) ---
-    const showNotification = useCallback((type, message) => {
-        const newNotification = { id: Date.now(), type, message };
-        setNotifications(prev => [...prev, newNotification]);
-        setTimeout(() => {
-            setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-        }, 5000);
-    }, []);
-
+        return () => {
+            clearTimeout(reconnectTimeoutRef.current);
+            if (wsRef.current) { wsRef.current.close(); }
+        };
+    }, [connectWebSocket]);
+    
     const value = {
         config,
         currentTechnician,
+        setCurrentTechnician,
         isInitializing,
         error,
         isOnline,
         notifications,
         showNotification,
-        // Export du système d'événements pour que les composants puissent s'abonner
         events: { on, off, emit },
     };
 

@@ -1,4 +1,4 @@
-// electron/services/adService.js - VERSION FINALE, COMPLÈTE ET CORRIGÉE
+// backend/services/adService.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
 
 const { executeEncodedPowerShell } = require('./powershellService');
 
@@ -33,7 +33,6 @@ function parseAdError(errorMessage) {
         return "L'opération a expiré. Le contrôleur de domaine ne répond pas assez vite.";
     }
 
-    // Si aucune correspondance, retourner une version nettoyée de l'erreur originale.
     return errorMessage.split('At line:')[0].trim();
 }
 
@@ -121,25 +120,6 @@ async function getAdGroupMembers(groupName) {
         return membersArray.map(m => ({ ...m, sam: m.SamAccountName, name: m.Name || m.DisplayName }));
     } catch (e) {
         console.warn(`Erreur membres groupe ${groupName}:`, parseAdError(e.message));
-        return [];
-    }
-}
-
-async function getAvailableAdGroups() {
-    const psScript = `
-        try {
-            Import-Module ActiveDirectory -ErrorAction Stop
-            Get-ADGroup -Filter 'GroupCategory -eq "Security"' | Select-Object Name | ConvertTo-Json -Compress
-        } catch {
-            '[]'
-        }
-    `;
-    try {
-        const jsonOutput = await executeEncodedPowerShell(psScript, 20000);
-        const groups = JSON.parse(jsonOutput || '[]');
-        return Array.isArray(groups) ? groups.map(g => g.Name) : [groups.Name];
-    } catch (e) {
-        console.error('Erreur récupération des groupes AD:', parseAdError(e.message));
         return [];
     }
 }
@@ -262,47 +242,6 @@ async function createAdUser(userData) {
     }
 }
 
-async function modifyAdUser(username, modifications) {
-    const {
-        firstName, lastName, displayName, email, description, enabled
-    } = modifications;
-
-    const escapeParam = (str) => str ? str.replace(/"/g, '`"') : '';
-
-    let setCommands = [];
-    if (firstName) setCommands.push(`-GivenName "${escapeParam(firstName)}"`);
-    if (lastName) setCommands.push(`-Surname "${escapeParam(lastName)}"`);
-    if (displayName) setCommands.push(`-DisplayName "${escapeParam(displayName)}"`);
-    if (email) setCommands.push(`-EmailAddress "${escapeParam(email)}"`);
-    if (description !== undefined) setCommands.push(`-Description "${escapeParam(description)}"`);
-    if (enabled !== undefined) setCommands.push(`-Enabled $${enabled}`);
-
-    if (setCommands.length === 0) {
-        return { success: true, message: "Aucune modification à appliquer." };
-    }
-
-    const psScript = `
-        try {
-            Import-Module ActiveDirectory -ErrorAction Stop
-            Set-ADUser -Identity "${escapeParam(username)}" ${setCommands.join(' ')} -ErrorAction Stop
-            @{ success = $true; message = "Utilisateur modifié avec succès" } | ConvertTo-Json -Compress
-        } catch {
-            @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
-        }
-    `;
-
-    try {
-        const result = await executeEncodedPowerShell(psScript, 15000);
-        const parsedResult = JSON.parse(result);
-        if (!parsedResult.success) {
-            parsedResult.error = parseAdError(parsedResult.error);
-        }
-        return parsedResult;
-    } catch (error) {
-        return { success: false, error: parseAdError(error.message) };
-    }
-}
-
 async function disableAdUser(username) {
     const psScript = `
         try {
@@ -380,7 +319,6 @@ async function getAdUserDetails(username) {
             $user = Get-ADUser -Identity "${username}" -Properties * -ErrorAction Stop
             $groups = Get-ADPrincipalGroupMembership -Identity $user | Select-Object -ExpandProperty Name
             
-            # Formater les dates en ISO 8601 pour une compatibilité parfaite avec JavaScript
             $result = @{
                 success = $true
                 user = @{
@@ -418,12 +356,10 @@ module.exports = {
     installAdModule,
     searchAdUsers,
     getAdGroupMembers,
-    getAvailableAdGroups,
     addUserToGroup,
     removeUserFromGroup,
-    isUserInGroup,
+    isUserInGroup, // **CORRECTION : Ajout de la fonction manquante à l'export**
     createAdUser,
-    modifyAdUser,
     disableAdUser,
     enableAdUser,
     resetAdUserPassword,

@@ -1,6 +1,6 @@
-// src/components/LoanHistoryDialog.js - Version améliorée avec affichage des accessoires
+// src/components/LoanHistoryDialog.js - AMÉLIORÉ avec config centralisée des accessoires
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -16,9 +16,9 @@ import TimelineSeparator from '@mui/lab/TimelineSeparator';
 import TimelineConnector from '@mui/lab/TimelineConnector';
 import TimelineContent from '@mui/lab/TimelineContent';
 import TimelineDot from '@mui/lab/TimelineDot';
-import TimelineOppositeContent, {
-  timelineOppositeContentClasses,
-} from '@mui/lab/TimelineOppositeContent';
+import TimelineOppositeContent, { timelineOppositeContentClasses } from '@mui/lab/TimelineOppositeContent';
+import apiService from '../services/apiService';
+import { getAccessoryIcon } from '../config/accessoriesConfig';
 
 // Icons
 import HistoryIcon from '@mui/icons-material/History';
@@ -28,22 +28,6 @@ import UpdateIcon from '@mui/icons-material/Update';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
-import MouseIcon from '@mui/icons-material/Mouse';
-import PowerIcon from '@mui/icons-material/Power';
-import WorkIcon from '@mui/icons-material/Work';
-import UsbIcon from '@mui/icons-material/Usb';
-import CableIcon from '@mui/icons-material/Cable';
-import DockIcon from '@mui/icons-material/Dock';
-
-// Même liste que dans LoanDialog
-const AVAILABLE_ACCESSORIES = [
-    { id: 'charger', label: 'Chargeur', icon: <PowerIcon fontSize="small" /> },
-    { id: 'mouse', label: 'Souris', icon: <MouseIcon fontSize="small" /> },
-    { id: 'bag', label: 'Sacoche', icon: <WorkIcon fontSize="small" /> },
-    { id: 'docking_station', label: 'Station d\'accueil', icon: <DockIcon fontSize="small" /> },
-    { id: 'usb_cable', label: 'Câble USB', icon: <UsbIcon fontSize="small" /> },
-    { id: 'hdmi_cable', label: 'Câble HDMI', icon: <CableIcon fontSize="small" /> },
-];
 
 const eventDetailsConfig = {
     created: { icon: <EventAvailableIcon />, color: 'success', text: 'Prêt créé' },
@@ -53,28 +37,16 @@ const eventDetailsConfig = {
     cancelled: { icon: <CancelIcon />, color: 'error', text: 'Annulé' },
 };
 
-// Composant pour afficher les accessoires
-const AccessoriesChips = ({ accessories, title = "Accessoires" }) => {
-    if (!accessories || accessories.length === 0) return null;
-
+const AccessoriesChips = ({ accessories, allAccessories, title = "Accessoires" }) => {
+    if (!accessories || accessories.length === 0 || allAccessories.length === 0) return null;
     return (
         <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>
-                {title}:
-            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" gutterBottom>{title}:</Typography>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                 {accessories.map(accId => {
-                    const accessory = AVAILABLE_ACCESSORIES.find(a => a.id === accId);
-                    if (!accessory) return null;
-                    return (
-                        <Chip
-                            key={accId}
-                            label={accessory.label}
-                            size="small"
-                            icon={accessory.icon}
-                            variant="outlined"
-                        />
-                    );
+                    const accessory = allAccessories.find(a => a.id === accId);
+                    if (!accessory) return <Chip key={accId} label={accId} size="small" variant="outlined" />;
+                    return <Chip key={accId} label={accessory.name} size="small" icon={getAccessoryIcon(accessory.icon)} variant="outlined" />;
                 })}
             </Box>
         </Box>
@@ -82,157 +54,63 @@ const AccessoriesChips = ({ accessories, title = "Accessoires" }) => {
 };
 
 const LoanHistoryDialog = ({ open, onClose, loan }) => {
-    if (!loan) return null;
+    const [allAccessories, setAllAccessories] = useState([]);
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('fr-FR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    useEffect(() => {
+        if (open) {
+            apiService.getAccessories().then(data => setAllAccessories(data || [])).catch(console.error);
+        }
+    }, [open]);
+
+    if (!loan) return null;
+    const formatDate = (dateString) => new Date(dateString).toLocaleString('fr-FR');
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
             <DialogTitle>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <HistoryIcon color="primary" />
-                        <Box>
-                            <Typography variant="h6" component="span">
-                                Historique du prêt - {loan.computerName}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                Pour {loan.userDisplayName}
-                            </Typography>
-                        </Box>
-                    </Box>
-                    <IconButton onClick={onClose}>
-                        <CloseIcon />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><HistoryIcon color="primary" /><Box><Typography variant="h6" component="span">Historique du prêt - {loan.computerName}</Typography><Typography variant="body2" color="text.secondary">Pour {loan.userDisplayName}</Typography></Box></Box>
+                    <IconButton onClick={onClose}><CloseIcon /></IconButton>
                 </Box>
             </DialogTitle>
             <DialogContent dividers>
-                {/* AJOUT: Affichage des accessoires prêtés en en-tête */}
                 {loan.accessories && loan.accessories.length > 0 && (
                     <Box sx={{ mb: 3, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" gutterBottom>
-                            📦 Informations sur le prêt
-                        </Typography>
-                        <AccessoriesChips accessories={loan.accessories} title="Accessoires prêtés" />
-                        
-                        {/* Afficher les accessoires retournés si le prêt est terminé */}
+                        <Typography variant="subtitle2" gutterBottom>📦 Informations sur le prêt</Typography>
+                        <AccessoriesChips accessories={loan.accessories} allAccessories={allAccessories} title="Accessoires prêtés" />
                         {loan.status === 'returned' && loan.returnData?.returnedAccessories && (
                             <>
-                                <AccessoriesChips 
-                                    accessories={loan.returnData.returnedAccessories} 
-                                    title="Accessoires retournés" 
-                                />
-                                
-                                {/* Accessoires manquants */}
+                                <AccessoriesChips accessories={loan.returnData.returnedAccessories} allAccessories={allAccessories} title="Accessoires retournés" />
                                 {(() => {
-                                    const missing = loan.accessories.filter(
-                                        id => !loan.returnData.returnedAccessories.includes(id)
-                                    );
-                                    if (missing.length > 0) {
-                                        return (
-                                            <Box sx={{ mt: 1 }}>
-                                                <Typography variant="caption" color="error" display="block" gutterBottom>
-                                                    ⚠️ Accessoires manquants:
-                                                </Typography>
-                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                                    {missing.map(accId => {
-                                                        const accessory = AVAILABLE_ACCESSORIES.find(a => a.id === accId);
-                                                        if (!accessory) return null;
-                                                        return (
-                                                            <Chip
-                                                                key={accId}
-                                                                label={accessory.label}
-                                                                size="small"
-                                                                icon={accessory.icon}
-                                                                color="error"
-                                                                variant="outlined"
-                                                            />
-                                                        );
-                                                    })}
-                                                </Box>
+                                    const missing = loan.accessories.filter(id => !loan.returnData.returnedAccessories.includes(id));
+                                    if (missing.length > 0) return (
+                                        <Box sx={{ mt: 1 }}>
+                                            <Typography variant="caption" color="error" display="block" gutterBottom>⚠️ Accessoires manquants:</Typography>
+                                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                {missing.map(accId => { const accessory = allAccessories.find(a => a.id === accId); if (!accessory) return null; return <Chip key={accId} label={accessory.name} size="small" icon={getAccessoryIcon(accessory.icon)} color="error" variant="outlined" />;})}
                                             </Box>
-                                        );
-                                    }
+                                        </Box>
+                                    );
                                 })()}
                             </>
                         )}
                     </Box>
                 )}
-
-                {/* Timeline des événements */}
                 {(loan.history || []).length === 0 ? (
-                    <Typography sx={{ p: 3, textAlign: 'center' }} color="text.secondary">
-                        Aucun historique détaillé disponible pour ce prêt.
-                    </Typography>
+                    <Typography sx={{ p: 3, textAlign: 'center' }} color="text.secondary">Aucun historique détaillé disponible.</Typography>
                 ) : (
-                    <Timeline
-                        sx={{
-                            [`& .${timelineOppositeContentClasses.root}`]: {
-                                flex: 0.2,
-                            },
-                        }}
-                    >
+                    <Timeline sx={{ [`& .${timelineOppositeContentClasses.root}`]: { flex: 0.2, }, }}>
                         {loan.history.map((event, index) => {
-                            const config = eventDetailsConfig[event.event] || {
-                                icon: <HistoryIcon />,
-                                color: 'grey',
-                                text: event.event
-                            };
-
+                            const config = eventDetailsConfig[event.event] || { icon: <HistoryIcon />, color: 'grey', text: event.event };
                             return (
                                 <TimelineItem key={index}>
-                                    <TimelineOppositeContent color="text.secondary">
-                                        {formatDate(event.timestamp)}
-                                    </TimelineOppositeContent>
-                                    <TimelineSeparator>
-                                        <TimelineDot color={config.color}>
-                                            {config.icon}
-                                        </TimelineDot>
-                                        {index < loan.history.length - 1 && <TimelineConnector />}
-                                    </TimelineSeparator>
+                                    <TimelineOppositeContent color="text.secondary">{formatDate(event.date)}</TimelineOppositeContent>
+                                    <TimelineSeparator><TimelineDot color={config.color}>{config.icon}</TimelineDot>{index < loan.history.length - 1 && <TimelineConnector />}</TimelineSeparator>
                                     <TimelineContent>
-                                        <Typography variant="subtitle2" component="span">
-                                            {config.text}
-                                        </Typography>
-                                        
-                                        {event.by && (
-                                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                                                <PersonIcon fontSize="small" sx={{ mr: 0.5, fontSize: 16 }} />
-                                                <Typography variant="caption" color="text.secondary">
-                                                    {event.by}
-                                                </Typography>
-                                            </Box>
-                                        )}
-                                        
-                                        {event.notes && (
-                                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                                                Note: {event.notes}
-                                            </Typography>
-                                        )}
-
-                                        {event.details && (
-                                            <Box sx={{ mt: 1 }}>
-                                                {event.details.newReturnDate && (
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Nouvelle date de retour: {new Date(event.details.newReturnDate).toLocaleDateString()}
-                                                    </Typography>
-                                                )}
-                                                {event.details.reason && (
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Raison: {event.details.reason}
-                                                    </Typography>
-                                                )}
-                                            </Box>
-                                        )}
+                                        <Typography variant="subtitle2" component="span">{config.text}</Typography>
+                                        {event.by && (<Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}><PersonIcon fontSize="small" sx={{ mr: 0.5, fontSize: 16 }} /><Typography variant="caption" color="text.secondary">{event.by}</Typography></Box>)}
+                                        {event.notes && (<Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>Note: {event.notes}</Typography>)}
+                                        {event.details && (<Box sx={{ mt: 1 }}>{event.details.newReturnDate && (<Typography variant="body2" color="text.secondary">Nouvelle date de retour: {new Date(event.details.newReturnDate).toLocaleDateString()}</Typography>)}{event.details.reason && (<Typography variant="body2" color="text.secondary">Raison: {event.details.reason}</Typography>)}</Box>)}
                                     </TimelineContent>
                                 </TimelineItem>
                             );
@@ -240,9 +118,7 @@ const LoanHistoryDialog = ({ open, onClose, loan }) => {
                     </Timeline>
                 )}
             </DialogContent>
-            <DialogActions>
-                <Button onClick={onClose}>Fermer</Button>
-            </DialogActions>
+            <DialogActions><Button onClick={onClose}>Fermer</Button></DialogActions>
         </Dialog>
     );
 };

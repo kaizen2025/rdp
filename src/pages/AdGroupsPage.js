@@ -1,4 +1,4 @@
-// src/pages/AdGroupsPage.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
+// src/pages/AdGroupsPage.js - VERSION ADAPTÉE À LA NOUVELLE CONFIGURATION
 
 import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { FixedSizeList } from 'react-window';
@@ -39,11 +39,6 @@ import { useApp } from '../contexts/AppContext';
 import { useCache } from '../contexts/CacheContext';
 import apiService from '../services/apiService';
 
-const GROUPS = {
-    'VPN': { name: 'VPN', description: 'Accès VPN distant', type: 'Sécurité' },
-    'Sortants_responsables': { name: 'Sortants_responsables', description: 'Accès Internet', type: 'Sécurité' }
-};
-
 const MemberRow = memo(({ member, style, isOdd, onRemove, groupName }) => (
     <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, backgroundColor: isOdd ? 'grey.50' : 'white', borderBottom: '1px solid', borderColor: 'divider', '&:hover': { backgroundColor: 'action.hover' } }}>
         <Box sx={{ flex: 1, pr: 2 }}>
@@ -57,14 +52,19 @@ const MemberRow = memo(({ member, style, isOdd, onRemove, groupName }) => (
 const TableHeader = memo(() => (
     <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', borderBottom: '2px solid', borderColor: 'primary.dark' }}>
         <Box sx={{ flex: 1 }}><Typography variant="subtitle2" fontWeight={600}>Membre</Typography></Box>
-        <Box sx={{ width: 100, textAlign: 'right' }}><Typography variant="subtitle2" fontWeight={600}>Actions</Typography></Box>
+        <Box sx={{ width: 60, textAlign: 'right' }}><Typography variant="subtitle2" fontWeight={600}>Actions</Typography></Box>
     </Box>
 ));
 
 const AdGroupsPage = () => {
-    const { showNotification, events } = useApp();
+    const { config, showNotification, events } = useApp();
     const { fetchWithCache, invalidate } = useCache();
-    const [selectedGroup, setSelectedGroup] = useState('VPN');
+
+    // Utilise les groupes de la configuration
+    const adGroups = useMemo(() => config?.ad_groups || {}, [config]);
+    const groupKeys = useMemo(() => Object.keys(adGroups), [adGroups]);
+    
+    const [selectedGroup, setSelectedGroup] = useState(groupKeys[0] || '');
     const [members, setMembers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -75,6 +75,7 @@ const AdGroupsPage = () => {
     const [userSearchTerm, setUserSearchTerm] = useState('');
 
     const loadGroupMembers = useCallback(async (force = false) => {
+        if (!selectedGroup) return;
         const loadingState = force ? setIsRefreshing : setIsLoading;
         loadingState(true);
         try {
@@ -146,17 +147,17 @@ const AdGroupsPage = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="h5">Gestion des Groupes Active Directory</Typography>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => setAddUserDialogOpen(true)}>Ajouter</Button>
+                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => setAddUserDialogOpen(true)}>Ajouter au groupe</Button>
                         <Tooltip title="Actualiser"><IconButton onClick={() => loadGroupMembers(true)} disabled={isRefreshing}>{isRefreshing ? <CircularProgress size={24} /> : <RefreshIcon />}</IconButton></Tooltip>
                     </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <FormControl sx={{ minWidth: 250 }}><InputLabel>Groupe</InputLabel><Select value={selectedGroup} label="Groupe" onChange={(e) => setSelectedGroup(e.target.value)}>{Object.entries(GROUPS).map(([key, group]) => (<MenuItem key={key} value={key}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><GroupIcon fontSize="small" />{group.name}<Chip label={group.type} size="small" variant="outlined" /></Box></MenuItem>))}</Select></FormControl>
+                    <FormControl sx={{ minWidth: 250 }}><InputLabel>Groupe</InputLabel><Select value={selectedGroup} label="Groupe" onChange={(e) => setSelectedGroup(e.target.value)}>{Object.entries(adGroups).map(([key, group]) => (<MenuItem key={key} value={group.name}><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><GroupIcon fontSize="small" />{group.name}<Chip label={group.type} size="small" variant="outlined" /></Box></MenuItem>))}</Select></FormControl>
                     <TextField size="small" placeholder="Rechercher un membre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>), }} sx={{ flexGrow: 1, maxWidth: 400 }} />
                     <Box sx={{ flexGrow: 1 }} />
                     <Chip icon={<GroupIcon />} label={`${filteredMembers.length} membre(s)`} color="primary" variant="outlined" />
                 </Box>
-                <Box sx={{ mt: 2, p: 1.5, backgroundColor: 'info.lighter', borderRadius: 1, display: 'flex', gap: 1 }}><InfoIcon color="info" fontSize="small" /><Typography variant="body2" color="info.dark">{GROUPS[selectedGroup].description}</Typography></Box>
+                {adGroups[selectedGroup] && <Box sx={{ mt: 2, p: 1.5, backgroundColor: 'info.lighter', borderRadius: 1, display: 'flex', gap: 1 }}><InfoIcon color="info" fontSize="small" /><Typography variant="body2" color="info.dark">{adGroups[selectedGroup].description}</Typography></Box>}
             </Paper>
             <Paper elevation={3} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <TableHeader />

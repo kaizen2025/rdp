@@ -1,47 +1,49 @@
-// src/hooks/useDataFetching.js - NOUVEAU HOOK UTILITAIRE
+// src/hooks/useDataFetching.js - VERSION FINALE STABILISÉE
 
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../contexts/AppContext';
 
 const useDataFetching = (fetchFunction, options = {}) => {
-    const { refreshInterval, entityName } = options;
+    const { refreshInterval, entityName, initialFetch = true } = options;
     const { events } = useApp();
     const [data, setData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(initialFetch);
     const [error, setError] = useState(null);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (isBackgroundRefresh = false) => {
+        if (!isBackgroundRefresh) setIsLoading(true);
+        setError(null);
+        
         try {
-            setIsLoading(true);
             const result = await fetchFunction();
             setData(result);
         } catch (err) {
+            console.error(`Erreur lors du fetch de ${entityName || 'données'}:`, err);
             setError(err.message);
         } finally {
             setIsLoading(false);
         }
-    }, [fetchFunction]);
+    }, [fetchFunction, entityName]);
 
     useEffect(() => {
-        fetchData();
-
-        let intervalId = null;
-        if (refreshInterval) {
-            intervalId = setInterval(fetchData, refreshInterval);
+        if (initialFetch) {
+            fetchData(false);
         }
 
-        let unsubscribe = null;
-        if (entityName) {
-            unsubscribe = events.on(`data_updated:${entityName}`, fetchData);
-        }
+        const handleRefresh = () => fetchData(true);
+
+        let intervalId = refreshInterval ? setInterval(handleRefresh, refreshInterval) : null;
+        const unsubscribe = entityName ? events.on(`data_updated:${entityName}`, handleRefresh) : null;
+        const forceRefreshUnsubscribe = events.on('force_refresh', handleRefresh);
 
         return () => {
             if (intervalId) clearInterval(intervalId);
             if (unsubscribe) unsubscribe();
+            forceRefreshUnsubscribe();
         };
-    }, [fetchData, refreshInterval, entityName, events]);
+    }, [fetchData, refreshInterval, entityName, events, initialFetch]);
 
-    return { data, isLoading, error, refresh: fetchData };
+    return { data, isLoading, error, refresh: () => fetchData(false) };
 };
 
 export default useDataFetching;
