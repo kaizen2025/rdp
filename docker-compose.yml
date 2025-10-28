@@ -41,16 +41,16 @@ services:
       MYSQL_PORT: 3306
       MYSQL_USER: guacamole_user
       MYSQL_PASSWORD: "guacamole_pass" # Doit correspondre à celui de la BDD
-      
+
       # --- CONFIGURATION DE L'AUTHENTIFICATION PAR TOKEN ---
-      # Activer l'authentification de base (MySQL) ET l'authentification par token JSON
-      EXTENSIONS: "auth-jdbc-mysql, auth-json"
-      
       # Clé secrète pour signer les tokens (doit correspondre à celle dans config.json)
       JSON_SECRET_KEY: "PBWmJHC2mKfvSUtc7eG7/d/QpPmeBrTAq9L6EgQHy+w="
-      
+
       # Durée de validité de la signature du token en secondes (60s est une bonne valeur)
       JSON_TIMESTAMP_AGE_LIMIT: "60"
+
+      # IMPORTANT: Activer explicitement l'extension JSON
+      JSON_ENABLED: "true"
 
     volumes:
       # Monter le dossier contenant le .jar de l'extension
