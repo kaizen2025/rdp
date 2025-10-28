@@ -1,9 +1,9 @@
-// src/pages/LoansCalendar.js - Calendrier de visualisation des prêts
+// src/pages/LoansCalendar.js - CORRIGÉ
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Box, Paper, Typography, IconButton, Chip, Tooltip, ButtonGroup, Button, Card, CardContent, Dialog,
-    DialogTitle, DialogContent, DialogActions, Alert, List, ListItem, ListItemText, Avatar
+    DialogTitle, DialogContent, DialogActions, Alert, List
 } from '@mui/material';
 import {
     ChevronLeft, ChevronRight, Today, CalendarMonth, ViewWeek
@@ -29,7 +29,7 @@ const STATUS_COLORS = {
 
 const LoansCalendar = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [view, setView] = useState('month'); // 'month' ou 'week'
+    const [view, setView] = useState('month');
     const [loans, setLoans] = useState([]);
     const [selectedDay, setSelectedDay] = useState(null);
     const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -37,7 +37,6 @@ const LoansCalendar = () => {
     useEffect(() => {
         const loadLoans = async () => {
             try {
-                // CORRECTION ICI
                 const data = await apiService.getLoans();
                 setLoans(data.filter(l => l.status !== 'returned' && l.status !== 'cancelled'));
             } catch (error) {
@@ -47,7 +46,6 @@ const LoansCalendar = () => {
         loadLoans();
     }, []);
 
-    // Navigation
     const goToPreviousMonth = () => {
         setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
     };
@@ -60,7 +58,6 @@ const LoansCalendar = () => {
         setCurrentDate(new Date());
     };
 
-    // Génération des jours du mois
     const getDaysInMonth = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
@@ -70,8 +67,6 @@ const LoansCalendar = () => {
         const startingDayOfWeek = firstDay.getDay();
 
         const days = [];
-
-        // Jours du mois précédent
         const prevMonthLastDay = new Date(year, month, 0).getDate();
         for (let i = startingDayOfWeek - 1; i >= 0; i--) {
             days.push({
@@ -80,8 +75,6 @@ const LoansCalendar = () => {
                 date: new Date(year, month - 1, prevMonthLastDay - i)
             });
         }
-
-        // Jours du mois actuel
         for (let i = 1; i <= daysInMonth; i++) {
             days.push({
                 day: i,
@@ -89,9 +82,7 @@ const LoansCalendar = () => {
                 date: new Date(year, month, i)
             });
         }
-
-        // Jours du mois suivant
-        const remainingDays = 42 - days.length; // 6 semaines * 7 jours
+        const remainingDays = 42 - days.length;
         for (let i = 1; i <= remainingDays; i++) {
             days.push({
                 day: i,
@@ -99,27 +90,21 @@ const LoansCalendar = () => {
                 date: new Date(year, month + 1, i)
             });
         }
-
         return days;
     }, [currentDate]);
 
-    // Prêts pour un jour donné
     const getLoansForDay = (date) => {
         return loans.filter(loan => {
             const loanStart = new Date(loan.loanDate);
             const loanEnd = new Date(loan.expectedReturnDate);
-            
-            // Normaliser les dates (00:00:00)
             const checkDate = new Date(date);
             checkDate.setHours(0, 0, 0, 0);
             loanStart.setHours(0, 0, 0, 0);
             loanEnd.setHours(0, 0, 0, 0);
-            
             return checkDate >= loanStart && checkDate <= loanEnd;
         });
     };
 
-    // Vérifier si c'est aujourd'hui
     const isToday = (date) => {
         const today = new Date();
         return date.getDate() === today.getDate() &&
@@ -135,7 +120,6 @@ const LoansCalendar = () => {
         }
     };
 
-    // Statistiques globales
     const stats = useMemo(() => {
         return {
             total: loans.length,
@@ -147,216 +131,60 @@ const LoansCalendar = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            {/* En-tête */}
             <Box sx={{ mb: 3 }}>
-                <Typography variant="h4" gutterBottom>
-                    Calendrier des Prêts
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                    Visualisez les prêts d'ordinateurs planifiés et en cours
-                </Typography>
+                <Typography variant="h4" gutterBottom>Calendrier des Prêts</Typography>
+                <Typography variant="body2" color="text.secondary">Visualisez les prêts d'ordinateurs planifiés et en cours</Typography>
             </Box>
-
-            {/* Statistiques rapides */}
             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-                <Chip
-                    label={`${stats.total} prêts total`}
-                    icon={<EventIcon />}
-                    color="default"
-                    variant="outlined"
-                />
-                <Chip
-                    label={`${stats.active} actifs`}
-                    icon={<EventIcon />}
-                    sx={{ bgcolor: STATUS_COLORS.active.bg, color: STATUS_COLORS.active.text }}
-                />
-                <Chip
-                    label={`${stats.reserved} réservés`}
-                    icon={<EventIcon />}
-                    sx={{ bgcolor: STATUS_COLORS.reserved.bg, color: STATUS_COLORS.reserved.text }}
-                />
+                <Chip label={`${stats.total} prêts total`} icon={<EventIcon />} color="default" variant="outlined" />
+                <Chip label={`${stats.active} actifs`} icon={<EventIcon />} sx={{ bgcolor: STATUS_COLORS.active.bg, color: STATUS_COLORS.active.text }} />
+                <Chip label={`${stats.reserved} réservés`} icon={<EventIcon />} sx={{ bgcolor: STATUS_COLORS.reserved.bg, color: STATUS_COLORS.reserved.text }} />
                 {stats.overdue > 0 && (
-                    <Chip
-                        label={`${stats.overdue} en retard`}
-                        icon={<EventIcon />}
-                        sx={{ bgcolor: STATUS_COLORS.overdue.bg, color: STATUS_COLORS.overdue.text }}
-                    />
+                    <Chip label={`${stats.overdue} en retard`} icon={<EventIcon />} sx={{ bgcolor: STATUS_COLORS.overdue.bg, color: STATUS_COLORS.overdue.text }} />
                 )}
             </Box>
-
-            {/* Contrôles de navigation */}
             <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <IconButton onClick={goToPreviousMonth}>
-                            <ChevronLeft />
-                        </IconButton>
-                        <Typography variant="h6" sx={{ minWidth: 200, textAlign: 'center' }}>
-                            {MONTHS_FR[currentDate.getMonth()]} {currentDate.getFullYear()}
-                        </Typography>
-                        <IconButton onClick={goToNextMonth}>
-                            <ChevronRight />
-                        </IconButton>
-                        <Button
-                            startIcon={<Today />}
-                            onClick={goToToday}
-                            size="small"
-                            variant="outlined"
-                        >
-                            Aujourd'hui
-                        </Button>
+                        <IconButton onClick={goToPreviousMonth}><ChevronLeft /></IconButton>
+                        <Typography variant="h6" sx={{ minWidth: 200, textAlign: 'center' }}>{MONTHS_FR[currentDate.getMonth()]} {currentDate.getFullYear()}</Typography>
+                        <IconButton onClick={goToNextMonth}><ChevronRight /></IconButton>
+                        <Button startIcon={<Today />} onClick={goToToday} size="small" variant="outlined">Aujourd'hui</Button>
                     </Box>
-
                     <ButtonGroup size="small">
-                        <Button
-                            variant={view === 'month' ? 'contained' : 'outlined'}
-                            startIcon={<CalendarMonth />}
-                            onClick={() => setView('month')}
-                        >
-                            Mois
-                        </Button>
-                        <Button
-                            variant={view === 'week' ? 'contained' : 'outlined'}
-                            startIcon={<ViewWeek />}
-                            onClick={() => setView('week')}
-                            disabled
-                        >
-                            Semaine
-                        </Button>
+                        <Button variant={view === 'month' ? 'contained' : 'outlined'} startIcon={<CalendarMonth />} onClick={() => setView('month')}>Mois</Button>
+                        <Button variant={view === 'week' ? 'contained' : 'outlined'} startIcon={<ViewWeek />} onClick={() => setView('week')} disabled>Semaine</Button>
                     </ButtonGroup>
                 </Box>
             </Paper>
-
-            {/* Calendrier */}
             <Paper elevation={3} sx={{ p: 2 }}>
-                {/* En-têtes des jours */}
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
-                    {DAYS_FR.map(day => (
-                        <Box
-                            key={day}
-                            sx={{
-                                textAlign: 'center',
-                                fontWeight: 'bold',
-                                color: 'text.secondary',
-                                py: 1
-                            }}
-                        >
-                            {day}
-                        </Box>
-                    ))}
+                    {DAYS_FR.map(day => (<Box key={day} sx={{ textAlign: 'center', fontWeight: 'bold', color: 'text.secondary', py: 1 }}>{day}</Box>))}
                 </Box>
-
-                {/* Grille des jours */}
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
                     {getDaysInMonth.map((dayInfo, index) => {
                         const dayLoans = getLoansForDay(dayInfo.date);
                         const isTodayDate = isToday(dayInfo.date);
-
                         return (
-                            <Box
-                                key={index}
-                                onClick={() => handleDayClick(dayInfo)}
-                                sx={{
-                                    minHeight: 100,
-                                    p: 1,
-                                    border: 1,
-                                    borderColor: isTodayDate ? 'primary.main' : 'divider',
-                                    borderWidth: isTodayDate ? 2 : 1,
-                                    borderRadius: 1,
-                                    bgcolor: dayInfo.isCurrentMonth ? 'background.paper' : 'action.hover',
-                                    cursor: dayLoans.length > 0 ? 'pointer' : 'default',
-                                    '&:hover': dayLoans.length > 0 ? {
-                                        bgcolor: 'action.hover',
-                                        boxShadow: 1
-                                    } : {},
-                                    position: 'relative'
-                                }}
-                            >
-                                <Typography
-                                    variant="body2"
-                                    sx={{
-                                        fontWeight: isTodayDate ? 'bold' : 'normal',
-                                        color: dayInfo.isCurrentMonth ? 'text.primary' : 'text.disabled'
-                                    }}
-                                >
-                                    {dayInfo.day}
-                                </Typography>
-
-                                {/* Indicateurs de prêts */}
+                            <Box key={index} onClick={() => handleDayClick(dayInfo)} sx={{ minHeight: 100, p: 1, border: 1, borderColor: isTodayDate ? 'primary.main' : 'divider', borderWidth: isTodayDate ? 2 : 1, borderRadius: 1, bgcolor: dayInfo.isCurrentMonth ? 'background.paper' : 'action.hover', cursor: dayLoans.length > 0 ? 'pointer' : 'default', '&:hover': dayLoans.length > 0 ? { bgcolor: 'action.hover', boxShadow: 1 } : {} }}>
+                                <Typography variant="body2" sx={{ fontWeight: isTodayDate ? 'bold' : 'normal', color: dayInfo.isCurrentMonth ? 'text.primary' : 'text.disabled' }}>{dayInfo.day}</Typography>
                                 <Box sx={{ mt: 0.5 }}>
-                                    {dayLoans.slice(0, 3).map((loan, idx) => (
-                                        <Tooltip
-                                            key={loan.id}
-                                            title={`${loan.computerName} - ${loan.userDisplayName}`}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    fontSize: '0.7rem',
-                                                    bgcolor: STATUS_COLORS[loan.status]?.bg || '#grey',
-                                                    color: STATUS_COLORS[loan.status]?.text || 'white',
-                                                    borderRadius: 0.5,
-                                                    px: 0.5,
-                                                    py: 0.25,
-                                                    mb: 0.5,
-                                                    overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
-                                                }}
-                                            >
-                                                {loan.computerName}
-                                            </Box>
-                                        </Tooltip>
-                                    ))}
-                                    {dayLoans.length > 3 && (
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                fontSize: '0.65rem',
-                                                color: 'text.secondary',
-                                                fontWeight: 'bold'
-                                            }}
-                                        >
-                                            +{dayLoans.length - 3} autre(s)
-                                        </Typography>
-                                    )}
+                                    {dayLoans.slice(0, 3).map((loan) => (<Tooltip key={loan.id} title={`${loan.computerName} - ${loan.userDisplayName}`}><Box sx={{ fontSize: '0.7rem', bgcolor: STATUS_COLORS[loan.status]?.bg || '#grey', color: STATUS_COLORS[loan.status]?.text || 'white', borderRadius: 0.5, px: 0.5, py: 0.25, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loan.computerName}</Box></Tooltip>))}
+                                    {dayLoans.length > 3 && (<Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 'bold' }}>+{dayLoans.length - 3} autre(s)</Typography>)}
                                 </Box>
                             </Box>
                         );
                     })}
                 </Box>
             </Paper>
-
-            {/* Légende */}
             <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <Typography variant="caption" sx={{ fontWeight: 'bold', mr: 1 }}>
-                    Légende:
-                </Typography>
-                {Object.entries(STATUS_COLORS).map(([status, config]) => (
-                    <Chip
-                        key={status}
-                        label={config.label}
-                        size="small"
-                        sx={{ bgcolor: config.bg, color: config.text }}
-                    />
-                ))}
+                <Typography variant="caption" sx={{ fontWeight: 'bold', mr: 1 }}>Légende:</Typography>
+                {Object.entries(STATUS_COLORS).map(([status, config]) => (<Chip key={status} label={config.label} size="small" sx={{ bgcolor: config.bg, color: config.text }} />))}
             </Box>
-
-            {/* Dialog détails du jour */}
-            <Dialog
-                open={detailDialogOpen}
-                onClose={() => setDetailDialogOpen(false)}
-                maxWidth="md"
-                fullWidth
-            >
+            <Dialog open={detailDialogOpen} onClose={() => setDetailDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EventIcon />
-                        Prêts du {selectedDay && selectedDay.date.toLocaleDateString('fr-FR', {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        })}
+                        <EventIcon /> Prêts du {selectedDay && selectedDay.date.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </Box>
                 </DialogTitle>
                 <DialogContent>
@@ -369,53 +197,24 @@ const LoansCalendar = () => {
                                             <Box sx={{ flex: 1 }}>
                                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                                     <LaptopIcon color="primary" />
-                                                    <Typography variant="h6">
-                                                        {loan.computerName}
-                                                    </Typography>
-                                                    <Chip
-                                                        label={STATUS_COLORS[loan.status]?.label || loan.status}
-                                                        size="small"
-                                                        sx={{
-                                                            bgcolor: STATUS_COLORS[loan.status]?.bg,
-                                                            color: STATUS_COLORS[loan.status]?.text
-                                                        }}
-                                                    />
+                                                    <Typography variant="h6">{loan.computerName}</Typography>
+                                                    <Chip label={STATUS_COLORS[loan.status]?.label || loan.status} size="small" sx={{ bgcolor: STATUS_COLORS[loan.status]?.bg, color: STATUS_COLORS[loan.status]?.text }} />
                                                 </Box>
-
-                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                                                    <PersonIcon fontSize="small" color="action" />
-                                                    <Typography variant="body2">
-                                                        {loan.userDisplayName || loan.userName}
-                                                    </Typography>
-                                                </Box>
-
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}><PersonIcon fontSize="small" color="action" /><Typography variant="body2">{loan.userDisplayName || loan.userName}</Typography></Box>
                                                 <Box sx={{ mt: 1 }}>
-                                                    <Typography variant="caption" color="text.secondary">
-                                                        Début: {new Date(loan.loanDate).toLocaleDateString('fr-FR')}
-                                                    </Typography>
-                                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
-                                                        Retour prévu: {new Date(loan.expectedReturnDate).toLocaleDateString('fr-FR')}
-                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">Début: {new Date(loan.loanDate).toLocaleDateString('fr-FR')}</Typography>
+                                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>Retour prévu: {new Date(loan.expectedReturnDate).toLocaleDateString('fr-FR')}</Typography>
                                                 </Box>
-
-                                                {loan.notes && (
-                                                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
-                                                        Note: {loan.notes}
-                                                    </Typography>
-                                                )}
+                                                {loan.notes && (<Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>Note: {loan.notes}</Typography>)}
                                             </Box>
                                         </Box>
                                     </CardContent>
                                 </Card>
                             ))}
                         </List>
-                    ) : (
-                        <Alert severity="info">Aucun prêt ce jour</Alert>
-                    )}
+                    ) : (<Alert severity="info">Aucun prêt ce jour</Alert>)}
                 </DialogContent>
-                <DialogActions>
-                    <Button onClick={() => setDetailDialogOpen(false)}>Fermer</Button>
-                </DialogActions>
+                <DialogActions><Button onClick={() => setDetailDialogOpen(false)}>Fermer</Button></DialogActions>
             </Dialog>
         </Box>
     );

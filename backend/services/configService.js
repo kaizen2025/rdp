@@ -1,4 +1,4 @@
-// backend/services/configService.js - VERSION FINALE AVEC RÉTROCOMPATIBILITÉ
+// backend/services/configService.js - VERSION FINALE SANS VÉRIFICATION GUACAMOLE
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -19,16 +19,22 @@ function normalizeConfig(config) {
         console.log("🔧 Clé de configuration obsolète 'defaultExcelPath' détectée. Utilisation de sa valeur pour 'excelFilePath'.");
         config.excelFilePath = config.defaultExcelPath;
     }
-    // On pourrait ajouter d'autres normalisations ici à l'avenir.
+    // La section guacamole est supprimée, donc plus besoin de normalisation ici.
 }
 
+/**
+ * Valide que les clés essentielles sont présentes et non des placeholders.
+ * @param {object} config - L'objet de configuration.
+ * @returns {{isValid: boolean, errors: string[]}}
+ */
 function validateConfig(config) {
     const errors = [];
     const requiredKeys = {
         'databasePath': 'Le chemin vers la base de données SQLite.',
         'excelFilePath': 'Le chemin vers le fichier Excel des utilisateurs (ou defaultExcelPath).',
-        'guacamole.url': 'L\'URL de votre serveur Guacamole.',
-        'guacamole.secretKey': 'La clé secrète pour l\'authentification Guacamole.',
+        // --- SUPPRESSION DES VÉRIFICATIONS GUACAMOLE ---
+        // 'guacamole.url': 'L\'URL de votre serveur Guacamole.',
+        // 'guacamole.secretKey': 'La clé secrète pour l\'authentification Guacamole.',
     };
 
     for (const [key, description] of Object.entries(requiredKeys)) {
@@ -48,14 +54,16 @@ async function loadConfigAsync() {
         appConfig = JSON.parse(data);
     } catch (error) {
         console.error(`⚠️ Impossible de lire config.json (${error.message}). Utilisation de la configuration template comme fallback.`);
-        appConfig = await fs.readFile(TEMPLATE_CONFIG_PATH, 'utf-8').then(JSON.parse).catch(() => {
+        try {
+            const templateData = await fs.readFile(TEMPLATE_CONFIG_PATH, 'utf-8');
+            appConfig = JSON.parse(templateData);
+        } catch (templateError) {
             throw new Error("ERREUR CRITIQUE: config.json et config.template.json sont tous deux illisibles.");
-        });
-        isConfigValid = false;
+        }
+        isConfigValid = false; // La template n'est jamais valide par défaut
         return;
     }
 
-    // **ÉTAPE DE NORMALISATION**
     normalizeConfig(appConfig);
 
     const { isValid, errors } = validateConfig(appConfig);
@@ -91,6 +99,7 @@ async function saveConfig(newConfig) {
         }
         return { success: true, message: "Configuration sauvegardée." };
     } catch (error) {
+        console.error('Erreur lors de la sauvegarde de la configuration:', error);
         return { success: false, message: `Erreur: ${error.message}` };
     }
 }

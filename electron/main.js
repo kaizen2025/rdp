@@ -1,34 +1,34 @@
-// electron/main.js - Application Electron avec auto-update
+// electron/main.js - Application Electron avec auto-update, RDP natif et URL de mise à jour configurable
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const { exec } = require('child_process');
+const fs = require('fs');
 
-// Configuration des logs
+// Configuration des logs pour le fichier et la console
 log.transports.file.level = 'info';
+log.transports.console.level = 'info';
 autoUpdater.logger = log;
 
-// Variables globales
 let mainWindow;
-let serverProcess;
 
-// Importer et démarrer le serveur Node.js
+// Démarrer le serveur Node.js interne
 function startServer() {
     const serverPath = path.join(__dirname, '..', 'server', 'server.js');
-    log.info(`Démarrage du serveur depuis: ${serverPath}`);
-
+    log.info(`[Main] Démarrage du serveur Node.js depuis: ${serverPath}`);
     try {
-        // Charger et démarrer le serveur
         require(serverPath);
-        log.info('✅ Serveur démarré avec succès');
+        log.info('[Main] ✅ Serveur Node.js démarré avec succès.');
     } catch (error) {
-        log.error('❌ Erreur lors du démarrage du serveur:', error);
-        dialog.showErrorBox('Erreur serveur', `Impossible de démarrer le serveur: ${error.message}`);
+        log.error('[Main] ❌ Erreur critique lors du démarrage du serveur:', error);
+        dialog.showErrorBox('Erreur Serveur Interne', `Impossible de démarrer le serveur local: ${error.message}`);
+        app.quit();
     }
 }
 
-// Créer la fenêtre principale
+// Créer la fenêtre principale de l'application
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -48,17 +48,15 @@ function createWindow() {
         show: false
     });
 
-    // Charger l'application React buildée
     const indexPath = path.join(__dirname, '..', 'build', 'index.html');
     mainWindow.loadFile(indexPath);
 
-    // Afficher la fenêtre quand elle est prête
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
-
-        // Vérifier les mises à jour après 5 secondes
+        log.info('[Main] Fenêtre principale affichée.');
         setTimeout(() => {
-            checkForUpdates();
+            log.info('[Main] Lancement de la première vérification de mise à jour...');
+            checkForUpdates(false); // `false` signifie que ce n'est pas une demande manuelle
         }, 5000);
     });
 
@@ -66,7 +64,6 @@ function createWindow() {
         mainWindow = null;
     });
 
-    // Ouvrir les liens externes dans le navigateur par défaut
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         require('electron').shell.openExternal(url);
         return { action: 'deny' };
@@ -75,124 +72,115 @@ function createWindow() {
 
 // Configuration de l'auto-updater
 function setupAutoUpdater() {
-    autoUpdater.autoDownload = false; // Ne pas télécharger automatiquement
-    autoUpdater.autoInstallOnAppQuit = true; // Installer à la fermeture de l'app
-
-    // Événement: Vérification des mises à jour
-    autoUpdater.on('checking-for-update', () => {
-        log.info('🔍 Vérification des mises à jour...');
-    });
-
-    // Événement: Mise à jour disponible
-    autoUpdater.on('update-available', (info) => {
-        log.info('✅ Mise à jour disponible:', info.version);
-
-        const response = dialog.showMessageBoxSync(mainWindow, {
-            type: 'info',
-            title: 'Mise à jour disponible',
-            message: `Une nouvelle version (${info.version}) est disponible !`,
-            detail: 'Voulez-vous télécharger et installer la mise à jour maintenant ?',
-            buttons: ['Oui, mettre à jour', 'Plus tard'],
-            defaultId: 0,
-            cancelId: 1
-        });
-
-        if (response === 0) {
-            autoUpdater.downloadUpdate();
+    try {
+        const configPath = path.join(app.getAppPath(), 'config', 'config.json');
+        const configData = fs.readFileSync(configPath, 'utf-8');
+        const config = JSON.parse(configData);
+        
+        if (config.updateUrl) {
+            log.info(`[Updater] URL de mise à jour personnalisée trouvée: ${config.updateUrl}`);
+            autoUpdater.setFeedURL(config.updateUrl);
+        } else {
+            log.warn('[Updater] Aucune URL de mise à jour personnalisée trouvée. Utilisation de la configuration par défaut.');
         }
-    });
-
-    // Événement: Aucune mise à jour disponible
-    autoUpdater.on('update-not-available', (info) => {
-        log.info('ℹ️ Aucune mise à jour disponible');
-    });
-
-    // Événement: Erreur lors de la vérification
-    autoUpdater.on('error', (err) => {
-        log.error('❌ Erreur lors de la vérification des mises à jour:', err);
-    });
-
-    // Événement: Téléchargement en cours
-    autoUpdater.on('download-progress', (progressObj) => {
-        let logMessage = `📥 Téléchargement: ${progressObj.percent.toFixed(2)}%`;
-        log.info(logMessage);
-
-        if (mainWindow) {
-            mainWindow.setProgressBar(progressObj.percent / 100);
-        }
-    });
-
-    // Événement: Téléchargement terminé
-    autoUpdater.on('update-downloaded', (info) => {
-        log.info('✅ Mise à jour téléchargée');
-
-        if (mainWindow) {
-            mainWindow.setProgressBar(-1); // Enlever la barre de progression
-        }
-
-        const response = dialog.showMessageBoxSync(mainWindow, {
-            type: 'info',
-            title: 'Mise à jour prête',
-            message: 'La mise à jour a été téléchargée avec succès !',
-            detail: 'L\'application va redémarrer pour installer la mise à jour.',
-            buttons: ['Redémarrer maintenant', 'Redémarrer plus tard'],
-            defaultId: 0,
-            cancelId: 1
-        });
-
-        if (response === 0) {
-            autoUpdater.quitAndInstall(false, true);
-        }
-    });
-}
-
-// Vérifier les mises à jour
-function checkForUpdates() {
-    autoUpdater.checkForUpdates()
-        .catch(err => {
-            log.error('Erreur lors de la vérification des mises à jour:', err);
-        });
-}
-
-// IPC Handlers
-ipcMain.handle('check-for-updates', async () => {
-    checkForUpdates();
-    return 'Vérification des mises à jour lancée';
-});
-
-ipcMain.handle('get-app-version', () => {
-    return app.getVersion();
-});
-
-// Cycle de vie de l'application
-app.whenReady().then(() => {
-    // Démarrer le serveur Node.js
-    startServer();
-
-    // Configurer l'auto-updater
-    setupAutoUpdater();
-
-    // Créer la fenêtre
-    createWindow();
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        }
-    });
-});
-
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
+    } catch (error) {
+        log.error('[Updater] Erreur lors de la lecture de config.json pour l\'URL de mise à jour. Utilisation de la configuration par défaut.', error);
     }
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+
+    autoUpdater.on('checking-for-update', () => log.info('[Updater] 🔍 Vérification des mises à jour...'));
+
+    autoUpdater.on('update-available', (info) => {
+        log.info(`[Updater] ✅ Mise à jour disponible: ${info.version}`);
+        dialog.showMessageBox(mainWindow, {
+            type: 'info', title: 'Mise à jour disponible',
+            message: `Une nouvelle version (${info.version}) est disponible.`,
+            detail: 'Voulez-vous la télécharger maintenant ? Le téléchargement se fera en arrière-plan.',
+            buttons: ['Oui', 'Plus tard'], defaultId: 0, cancelId: 1
+        }).then(({ response }) => {
+            if (response === 0) {
+                autoUpdater.downloadUpdate();
+            }
+        });
+    });
+
+    autoUpdater.on('update-not-available', (info) => {
+        log.info('[Updater] ℹ️ Aucune mise à jour disponible.');
+    });
+
+    autoUpdater.on('error', (err) => log.error(`[Updater] ❌ Erreur: ${err.message}`));
+
+    autoUpdater.on('download-progress', (p) => {
+        log.info(`[Updater] 📥 Téléchargement: ${p.percent.toFixed(2)}%`);
+        if (mainWindow) mainWindow.setProgressBar(p.percent / 100);
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        log.info('[Updater] ✅ Mise à jour téléchargée. Prête à être installée.');
+        if (mainWindow) mainWindow.setProgressBar(-1);
+        dialog.showMessageBox(mainWindow, {
+            type: 'info', title: 'Mise à jour prête',
+            message: 'La mise à jour a été téléchargée.',
+            detail: 'L\'application va maintenant redémarrer pour installer la nouvelle version.',
+            buttons: ['Redémarrer et Mettre à Jour'], defaultId: 0
+        }).then(() => {
+            autoUpdater.quitAndInstall(true, true);
+        });
+    });
+}
+
+function checkForUpdates(isManual) {
+    autoUpdater.checkForUpdates().catch(err => {
+        log.error('[Updater] Échec de la vérification des mises à jour :', err);
+        if (isManual) {
+            dialog.showErrorBox('Erreur de mise à jour', `Impossible de vérifier les mises à jour : ${err.message}`);
+        }
+    });
+}
+
+// --- IPC Handlers ---
+function setupIpcHandlers() {
+    ipcMain.handle('get-app-version', () => app.getVersion());
+    
+    ipcMain.handle('check-for-updates', async () => {
+        checkForUpdates(true); // `true` signifie que c'est une demande manuelle
+        return { success: true, message: 'Vérification lancée.' };
+    });
+
+    ipcMain.handle('launch-rdp', async (event, params) => {
+        const { server, sessionId } = params;
+        if (!server) return { success: false, error: 'Serveur non spécifié' };
+
+        const command = sessionId
+            ? `mstsc.exe /shadow:${sessionId} /v:${server} /control`
+            : `mstsc.exe /v:${server}`;
+        
+        log.info(`[RDP] Lancement de: ${command}`);
+
+        return new Promise((resolve) => {
+            exec(command, (error) => {
+                if (error) {
+                    log.error(`[RDP] Erreur: ${error.message}`);
+                    resolve({ success: false, error: error.message });
+                } else {
+                    resolve({ success: true });
+                }
+            });
+        });
+    });
+}
+
+// --- Cycle de vie de l'application ---
+app.whenReady().then(() => {
+    startServer();
+    setupAutoUpdater();
+    setupIpcHandlers();
+    createWindow();
+    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
 
-app.on('will-quit', () => {
-    log.info('🛑 Arrêt de l\'application');
-});
-
-// Gestion des erreurs non capturées
-process.on('uncaughtException', (error) => {
-    log.error('❌ Erreur non capturée:', error);
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('will-quit', () => log.info('[Main] 🛑 Arrêt de l\'application.'));
+process.on('uncaughtException', (error) => log.error('[Main] ❌ Erreur non capturée:', error));

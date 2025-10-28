@@ -1,6 +1,6 @@
-// src/pages/ComputerLoanHistoryPage.js - CORRIGÉ POUR UTILISER L'API WEB
+// src/pages/ComputerLoanHistoryPage.js - CORRIGÉ
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box, Paper, Typography, Autocomplete, TextField, Table, TableBody,
     TableCell, TableContainer, TableHead, TableRow, Chip, CircularProgress, Alert
@@ -12,7 +12,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { useApp } from '../contexts/AppContext';
-import apiService from '../services/apiService'; // Utiliser le service API
+import apiService from '../services/apiService';
 
 const eventConfig = {
     created: {
@@ -50,7 +50,6 @@ const ComputerLoanHistoryPage = () => {
         const loadComputers = async () => {
             setLoadingComputers(true);
             try {
-                // CORRECTION : Utilisation de apiService
                 const data = await apiService.getComputers();
                 if (Array.isArray(data) && data.length > 0) {
                     const sortedComputers = data.sort((a, b) => 
@@ -81,7 +80,6 @@ const ComputerLoanHistoryPage = () => {
         const loadHistory = async () => {
             setHistoryLoading(true);
             try {
-                // CORRECTION : Utilisation de apiService
                 const computerHistory = await apiService.getLoanHistory({
                     computerId: selectedComputer.id,
                     limit: 1000
@@ -89,7 +87,6 @@ const ComputerLoanHistoryPage = () => {
 
                 setHistory(Array.isArray(computerHistory) ? computerHistory : []);
 
-                // Calculer les statistiques
                 const loans = computerHistory.filter(e => e.eventType === 'created');
                 const returned = computerHistory.filter(e => e.eventType === 'returned');
                 const active = loans.length - returned.length;

@@ -3,14 +3,9 @@
   "domain": "anecoopfr.local",
   "username": "admin_anecoop",
   "password": "vCQhNZ2aY2v!",
-  "defaultExcelPath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\Data_utilisateur_partage.xlsx",
+  "excelFilePath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\Data_utilisateur_partage.xlsx",
   "databasePath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\rds_viewer_data.sqlite",
-  "guacamole": {
-    "url": "http://localhost:8080/guacamole",
-    "username": "guacadmin",
-    "password": "guacadmin",
-    "secretKey": "PBWmJHC2mKfvSUtc7eG7/d/QpPmeBrTAq9L6EgQHy+w="
-  },
+  "updateUrl": "http://192.168.1.232/update/",
   "rds_servers": [
     "SRV-RDS-1",
     "SRV-RDS-2",
@@ -38,9 +33,12 @@
   "notifications": { "enabled": true, "loanReminders": true, "overdueLoanAlerts": true },
   "ui": { "theme": "light", "autoRefresh": true, "compactView": false },
   "excelColumnMapping": {
-    "Username": "username",
-    "Full Name": "displayName",
-    "Server": "server",
-    "Password": "password"
+    "Identifiant": "username",
+    "Nom complet": "displayName",
+    "Serveur": "server",
+    "Mot de passe": "password",
+    "Mot de passe Office": "officePassword",
+    "Email": "email",
+    "Service": "department"
   }
 }

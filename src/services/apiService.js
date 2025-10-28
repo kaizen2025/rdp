@@ -1,4 +1,4 @@
-// src/services/apiService.js - VERSION CORRIGÉE (Arrow Functions pour préserver 'this')
+// src/services/apiService.js - VERSION FINALE, COMPLÈTE ET NETTOYÉE
 
 class ApiService {
     constructor() {
@@ -7,7 +7,9 @@ class ApiService {
         console.log(`🔧 ApiService initialisé avec baseURL: ${this.baseURL} pour le technicien: ${this.currentTechnicianId || 'aucun'}`);
     }
 
-    // CORRECTION CRITIQUE: Utiliser arrow function pour préserver le contexte 'this'
+    /**
+     * Méthode de requête centrale. L'utilisation d'une arrow function garantit que 'this' est correctement lié.
+     */
     request = async (endpoint, options = {}) => {
         const url = `${this.baseURL}${endpoint}`;
         const techId = this.currentTechnicianId;
@@ -18,15 +20,17 @@ class ApiService {
         try {
             const response = await fetch(url, config);
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: response.statusText }));
-                const errorMessage = errorData.error || errorData.details || errorData.message || `Erreur HTTP ${response.status}`;
-                throw new Error(errorMessage);
+                const errorData = await response.json().catch(() => ({ error: response.statusText, message: `Erreur HTTP ${response.status}` }));
+                const errorMessage = errorData.error || errorData.details || errorData.message;
+                const error = new Error(errorMessage);
+                error.response = response; // Attache la réponse complète à l'erreur
+                throw error;
             }
-            if (response.status === 204) return null;
+            if (response.status === 204) return null; // No Content
             return response.json();
         } catch (error) {
             if (error.message.includes('Failed to fetch')) {
-                throw new Error('Impossible de contacter le serveur. Vérifiez que le backend est démarré.');
+                throw new Error('Impossible de contacter le serveur. Vérifiez que le backend est démarré et accessible.');
             }
             throw error;
         }
@@ -57,18 +61,11 @@ class ApiService {
     getConfig = async () => this.request('/config')
     saveConfig = async (newConfig) => this.request('/config', { method: 'POST', body: JSON.stringify({ newConfig }) })
 
-    // SESSIONS RDS & GUACAMOLE
+    // SESSIONS RDS
     getRdsSessions = async () => this.request('/rds-sessions')
     refreshRdsSessions = async () => this.request('/rds-sessions/refresh', { method: 'POST' })
     sendRdsMessage = async (server, sessionId, message) => this.request('/rds-sessions/send-message', { method: 'POST', body: JSON.stringify({ server, sessionId, message }) })
     pingRdsServer = async (server) => this.request(`/rds-sessions/ping/${server}`)
-    createGuacamoleConnection = async (payload) => {
-        try {
-            const response = await this.request('/rds-sessions/guacamole-token', { method: 'POST', body: JSON.stringify(payload) });
-            if (!response.token || !response.url) { throw new Error('Réponse invalide du serveur pour le token Guacamole.'); }
-            return response;
-        } catch (error) { console.error('❌ Erreur createGuacamoleConnection:', error); throw error; }
-    }
 
     // ORDINATEURS (COMPUTERS)
     getComputers = async () => this.request('/computers')
@@ -126,5 +123,6 @@ class ApiService {
     toggleChatReaction = async (messageId, channelId, emoji) => this.request('/chat/reactions', { method: 'POST', body: JSON.stringify({ messageId, channelId, emoji }) })
 }
 
+// Création d'une instance unique (singleton) pour toute l'application
 const apiService = new ApiService();
 export default apiService;

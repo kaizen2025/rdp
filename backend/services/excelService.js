@@ -1,4 +1,4 @@
-// backend/services/excelService.js - VERSION FINALE AVEC MAPPING PAR DÉFAUT
+// backend/services/excelService.js
 
 const XLSX = require('xlsx');
 const fs = require('fs');
@@ -6,30 +6,17 @@ const path = require('path');
 const configService = require('./configService');
 const { safeReadJsonFile, safeWriteJsonFile } = require('./fileService');
 
-let localExcelCachePath = null;
 let memoryCache = null;
 let memoryCacheTimestamp = null;
-const MEMORY_CACHE_TTL = 30000;
-
-// **CORRECTION DÉFINITIVE : Ajout d'un mapping par défaut robuste.**
-const DEFAULT_COLUMN_MAPPING = {
-    'Identifiant': 'username',
-    'Nom Complet': 'displayName',
-    'Serveur': 'server',
-    'Mot de passe': 'password'
-};
+const MEMORY_CACHE_TTL = 30000; // 30 secondes
 
 function getCachePath() {
-    if (localExcelCachePath === null) {
-        const dbPath = configService.getConfig().databasePath;
-        if (dbPath) {
-            localExcelCachePath = path.join(path.dirname(dbPath), 'cache-excel.json');
-        } else {
-            console.warn("Chemin DB non défini, cache Excel désactivé.");
-            localExcelCachePath = '';
-        }
+    const dbPath = configService.getConfig().databasePath;
+    if (dbPath) {
+        return path.join(path.dirname(dbPath), 'cache-excel.json');
     }
-    return localExcelCachePath;
+    console.warn("Chemin DB non défini, cache Excel sur disque désactivé.");
+    return null;
 }
 
 async function readExcelFileAsync() {
@@ -38,29 +25,31 @@ async function readExcelFileAsync() {
 
     const now = Date.now();
     if (memoryCache && (now - memoryCacheTimestamp) < MEMORY_CACHE_TTL) {
-        console.log('🔦 Utilisation cache mémoire Excel');
+        console.log('🔦 Utilisation du cache mémoire Excel.');
         return { success: true, users: memoryCache, fromMemoryCache: true };
     }
 
-    const currentCachePath = getCachePath();
-
     try {
         if (!excelPath || !fs.existsSync(excelPath)) {
-            throw new Error(`Fichier Excel introuvable. Vérifiez 'excelFilePath' dans config.json. Chemin: ${excelPath}`);
+            throw new Error(`Fichier Excel introuvable. Vérifiez le chemin dans config.json. Chemin actuel: ${excelPath}`);
         }
 
         const workbook = XLSX.readFile(excelPath);
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false, defval: '' });
 
-        // Utiliser le mapping de la config, ou le mapping par défaut si non fourni.
-        const columnMapping = config.excelColumnMapping || DEFAULT_COLUMN_MAPPING;
+        const columnMapping = config.excelColumnMapping;
+        if (!columnMapping || !columnMapping['Identifiant'] || !columnMapping['Nom complet']) {
+             throw new Error("La section 'excelColumnMapping' dans config.json est manquante ou incomplète. 'Identifiant' et 'Nom complet' sont requis.");
+        }
 
         const usersByServer = data.reduce((acc, row) => {
-            const user = Object.entries(columnMapping).reduce((obj, [header, key]) => {
-                if (row[header] !== undefined) obj[key] = String(row[header]).trim();
-                return obj;
-            }, {});
+            const user = {};
+            for (const [header, key] of Object.entries(columnMapping)) {
+                if (row[header] !== undefined) {
+                    user[key] = String(row[header]).trim();
+                }
+            }
 
             if (user.username) {
                 const server = user.server || config.rds_servers?.[0] || 'default';
@@ -69,17 +58,25 @@ async function readExcelFileAsync() {
             return acc;
         }, {});
 
-        if (currentCachePath) await safeWriteJsonFile(currentCachePath, usersByServer);
+        const userCount = Object.values(usersByServer).flat().length;
+        if (userCount === 0) {
+            console.warn("⚠️ Le fichier Excel a été lu, mais aucun utilisateur n'a été trouvé. Vérifiez le mapping des colonnes dans config.json et les en-têtes du fichier Excel.");
+        } else {
+             console.log(`✅ Fichier Excel chargé: ${userCount} utilisateurs trouvés.`);
+        }
+
+        const cachePath = getCachePath();
+        if (cachePath) await safeWriteJsonFile(cachePath, usersByServer);
         memoryCache = usersByServer;
         memoryCacheTimestamp = now;
 
-        console.log(`✅ Excel chargé: ${Object.values(usersByServer).flat().length} utilisateurs`);
         return { success: true, users: usersByServer };
 
     } catch (error) {
-        console.warn(`⚠️ Erreur lecture Excel (${error.message}), tentative d'utilisation du cache.`);
-        if (currentCachePath) {
-            const cachedData = await safeReadJsonFile(currentCachePath, {});
+        console.warn(`⚠️ Erreur lecture Excel (${error.message}), tentative d'utilisation du cache disque.`);
+        const cachePath = getCachePath();
+        if (cachePath) {
+            const cachedData = await safeReadJsonFile(cachePath, {});
             if (Object.keys(cachedData).length > 0) {
                 memoryCache = cachedData;
                 memoryCacheTimestamp = now;
@@ -90,39 +87,91 @@ async function readExcelFileAsync() {
     }
 }
 
-// Les fonctions de sauvegarde et de suppression utiliseront également le mapping par défaut.
+// Les fonctions de sauvegarde et suppression restent inchangées mais bénéficieront du mapping correct.
 async function saveUserToExcel({ user, isEdit }) {
     const config = configService.getConfig();
     const excelPath = config.excelFilePath;
-    const columnMapping = config.excelColumnMapping || DEFAULT_COLUMN_MAPPING;
-    const reverseMapping = Object.entries(columnMapping).reduce((acc, [key, value]) => ({...acc, [value]: key }), {});
+    const columnMapping = config.excelColumnMapping;
+    const reverseMapping = Object.entries(columnMapping).reduce((acc, [key, value]) => ({ ...acc, [value]: key }), {});
 
-    // ... la logique reste la même ...
+    try {
+        const workbook = XLSX.readFile(excelPath);
+        const sheetName = workbook.SheetNames[0];
+        const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        
+        const userRow = {};
+        for (const key in user) {
+            if (reverseMapping[key]) {
+                userRow[reverseMapping[key]] = user[key];
+            }
+        }
+        
+        const userIndex = data.findIndex(row => row[reverseMapping.username] === user.username);
+        
+        if (isEdit && userIndex > -1) {
+            data[userIndex] = { ...data[userIndex], ...userRow };
+        } else if (!isEdit && userIndex === -1) {
+            data.push(userRow);
+        } else if (!isEdit && userIndex > -1) {
+            throw new Error(`L'utilisateur ${user.username} existe déjà.`);
+        } else {
+            throw new Error(`L'utilisateur ${user.username} à modifier est introuvable.`);
+        }
+
+        const newSheet = XLSX.utils.json_to_sheet(data, { header: Object.keys(columnMapping) });
+        workbook.Sheets[sheetName] = newSheet;
+        XLSX.writeFile(workbook, excelPath);
+
+        invalidateCache();
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 }
+
 
 async function deleteUserFromExcel({ username }) {
     const config = configService.getConfig();
     const excelPath = config.excelFilePath;
-    const columnMapping = config.excelColumnMapping || DEFAULT_COLUMN_MAPPING;
-    const reverseMapping = Object.entries(columnMapping).reduce((acc, [key, value]) => ({...acc, [value]: key }), {});
+    const columnMapping = config.excelColumnMapping;
+    const usernameHeader = Object.keys(columnMapping).find(key => columnMapping[key] === 'username');
 
-    // ... la logique reste la même ...
+    try {
+        const workbook = XLSX.readFile(excelPath);
+        const sheetName = workbook.SheetNames[0];
+        let data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        
+        const initialLength = data.length;
+        data = data.filter(row => row[usernameHeader] !== username);
+
+        if (data.length === initialLength) {
+            throw new Error(`Utilisateur "${username}" non trouvé.`);
+        }
+        
+        const newSheet = XLSX.utils.json_to_sheet(data, { header: Object.keys(columnMapping) });
+        workbook.Sheets[sheetName] = newSheet;
+        XLSX.writeFile(workbook, excelPath);
+
+        invalidateCache();
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
 }
 
 
 function invalidateCache() {
     memoryCache = null;
     memoryCacheTimestamp = null;
-    const currentCachePath = getCachePath();
-    if (currentCachePath && fs.existsSync(currentCachePath)) {
-        fs.unlinkSync(currentCachePath);
+    const cachePath = getCachePath();
+    if (cachePath && fs.existsSync(cachePath)) {
+        try {
+            fs.unlinkSync(cachePath);
+        } catch (e) {
+            console.warn("Impossible de supprimer le cache disque Excel:", e.message);
+        }
     }
     console.log("🧹 Cache Excel invalidé.");
 }
 
-module.exports = {
-    readExcelFileAsync,
-    saveUserToExcel,
-    deleteUserFromExcel,
-    invalidateCache,
-};
+module.exports = { readExcelFileAsync, saveUserToExcel, deleteUserFromExcel, invalidateCache };

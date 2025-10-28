@@ -1,27 +1,28 @@
-// src/pages/SessionsPage.js - VERSION FINALE AVEC CORRECTION D'IMPORT ET APPEL API
+// src/pages/SessionsPage.js - VERSION FINALE AVEC LIAISON DONNÉES UTILISATEUR CORRIGÉE
 
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, TextField, Chip, Tooltip, IconButton, FormControl, InputLabel, Select, MenuItem, InputAdornment, Switch, FormControlLabel, Dialog, DialogContent, DialogTitle, LinearProgress } from '@mui/material'; // Ajout de LinearProgress
-import { Person as PersonIcon, Dns as DnsIcon, Timer as TimerIcon, VpnKey as VpnKeyIcon, ScreenShare as ScreenShareIcon, Computer as ComputerIcon, Message as MessageIcon, Info as InfoIcon, Refresh as RefreshIcon, Announcement as AnnouncementIcon, CheckCircle as CheckCircleIcon, RadioButtonUnchecked as RadioButtonUncheckedIcon, Search as SearchIcon, Close as CloseIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress, Alert, TextField, Chip, Tooltip, IconButton, FormControl, InputLabel, Select, MenuItem, InputAdornment, Switch, FormControlLabel, LinearProgress } from '@mui/material';
+import { Person as PersonIcon, Dns as DnsIcon, Timer as TimerIcon, VpnKey as VpnKeyIcon, ScreenShare as ScreenShareIcon, Computer as ComputerIcon, Message as MessageIcon, Info as InfoIcon, Refresh as RefreshIcon, Announcement as AnnouncementIcon, CheckCircle as CheckCircleIcon, RadioButtonUnchecked as RadioButtonUncheckedIcon, Search as SearchIcon } from '@mui/icons-material';
 
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/apiService';
 import SendMessageDialog from '../components/SendMessageDialog';
 import UserInfoDialog from '../components/UserInfoDialog';
 import GlobalMessageDialog from '../components/GlobalMessageDialog';
-import GuacamoleViewer from '../components/GuacamoleViewer';
 
 const GroupedUserRow = memo(({ user, sessions, onSendMessage, onShowInfo, onShadow, onConnect, getUserInfo }) => {
     const userInfo = useMemo(() => getUserInfo(user), [getUserInfo, user]);
     const mainSession = useMemo(() => sessions.find(s => s.isActive) || sessions[0], [sessions]);
     const serverList = useMemo(() => [...new Set(sessions.map(s => s.server))], [sessions]);
     const isActive = useMemo(() => sessions.some(s => s && s.isActive), [sessions]);
+    
     const oldestSession = useMemo(() => {
         if (!isActive) return null;
         const sessionsWithTime = sessions.filter(s => s.logonTime);
         if (sessionsWithTime.length === 0) return null;
         return sessionsWithTime.reduce((oldest, current) => new Date(oldest.logonTime) > new Date(current.logonTime) ? current : oldest);
     }, [sessions, isActive]);
+
     const sessionDuration = useMemo(() => {
         if (!oldestSession) return 'N/A';
         const diffMs = new Date() - new Date(oldestSession.logonTime);
@@ -37,19 +38,19 @@ const GroupedUserRow = memo(({ user, sessions, onSendMessage, onShowInfo, onShad
 
     return (
         <TableRow hover>
-            <TableCell>{userInfo?.displayName || user}</TableCell>
-            <TableCell><Typography variant="body2" fontWeight="bold">{user}</Typography></TableCell>
+            <TableCell sx={{ fontWeight: 500 }}>{userInfo?.displayName || user}</TableCell>
+            <TableCell><Typography variant="body2">{user}</Typography></TableCell>
             <TableCell><Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>{serverList.map(s => <Chip key={s} label={s} size="small" />)}</Box></TableCell>
             <TableCell><Chip label={isActive ? 'Actif' : 'Déconnecté'} color={isActive ? 'success' : 'default'} size="small" icon={isActive ? <CheckCircleIcon/> : <RadioButtonUncheckedIcon/>} /></TableCell>
-            <TableCell><Box sx={{display: 'flex', alignItems: 'center'}}><TimerIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }}/>{sessionDuration}</Box></TableCell>
+            <TableCell><Box sx={{display: 'flex', alignItems: 'center', color: 'text.secondary'}}><TimerIcon fontSize="small" sx={{ mr: 1 }}/>{sessionDuration}</Box></TableCell>
             <TableCell>{oldestSession ? new Date(oldestSession.logonTime).toLocaleString('fr-FR') : 'N/A'}</TableCell>
             <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Tooltip title={isActive ? "Shadow - Prise en main directe" : "Session inactive"}>
-                        <span><IconButton size="small" onClick={() => onShadow(mainSession, userInfo)} color="primary" disabled={!isActive}><ScreenShareIcon /></IconButton></span>
+                    <Tooltip title={isActive ? "Shadow - Prise en main directe (app bureau)" : "Session inactive"}>
+                        <span><IconButton size="small" onClick={() => onShadow(mainSession)} color="primary" disabled={!isActive || !window.electronAPI}><ScreenShareIcon /></IconButton></span>
                     </Tooltip>
-                    <Tooltip title="Connexion RDP directe">
-                        <span><IconButton size="small" onClick={() => onConnect(mainSession, userInfo)} color="success"><ComputerIcon /></IconButton></span>
+                    <Tooltip title="Connexion RDP directe (app bureau)">
+                        <span><IconButton size="small" onClick={() => onConnect(mainSession)} color="success" disabled={!window.electronAPI}><ComputerIcon /></IconButton></span>
                     </Tooltip>
                     <Tooltip title={isActive ? "Envoyer un message" : "Session inactive"}>
                         <span><IconButton size="small" onClick={() => onSendMessage(mainSession)} color="info" disabled={!isActive}><MessageIcon /></IconButton></span>
@@ -76,36 +77,29 @@ const SessionsPage = () => {
     const [serverFilter, setServerFilter] = useState('all');
     const [dialogState, setDialogState] = useState({ type: null, data: null });
     const [multiScreenMode, setMultiScreenMode] = useState(false);
-    const [guacamoleConfig, setGuacamoleConfig] = useState(null);
 
     const loadData = useCallback(async (isRefresh = false) => {
         if (isRefresh) setIsRefreshing(true); else setIsLoading(true);
         setError('');
         try {
-            const sessionsData = await apiService.getRdsSessions();
+            const [sessionsData, usersData] = await Promise.all([
+                apiService.getRdsSessions(),
+                apiService.getExcelUsers()
+            ]);
+
             setSessions(Array.isArray(sessionsData) ? sessionsData : []);
 
-            // Charger les données Excel séparément pour mieux gérer les erreurs
-            try {
-                const usersData = await apiService.getExcelUsers();
-                if (usersData.success) {
-                    setUsers(usersData.users || {});
-                } else {
-                    // Si le backend signale une erreur (ex: fichier non trouvé), l'afficher.
-                    const excelError = usersData.error || "Le fichier Excel n'a pas pu être chargé.";
-                    setError(`Erreur de données utilisateur : ${excelError}`);
-                    showNotification('warning', excelError);
-                    setUsers({}); // S'assurer que les anciennes données sont effacées.
-                }
-            } catch (excelErr) {
-                setError(`Erreur critique lors du chargement des données Excel: ${excelErr.message}`);
-                showNotification('error', `Erreur Excel: ${excelErr.message}`);
+            if (usersData.success && usersData.users) {
+                setUsers(usersData.users);
+            } else {
+                const excelError = usersData.error || "Le fichier Excel n'a pas pu être chargé.";
+                setError(`Erreur de données utilisateur : ${excelError}`);
+                showNotification('warning', excelError);
                 setUsers({});
             }
-
         } catch (err) {
-            setError(`Erreur de chargement des sessions : ${err.message}`);
-            showNotification('error', `Erreur sessions: ${err.message}`);
+            setError(`Erreur de chargement des données : ${err.message}`);
+            showNotification('error', `Erreur de chargement: ${err.message}`);
         } finally {
             setIsLoading(false);
             setIsRefreshing(false);
@@ -119,41 +113,47 @@ const SessionsPage = () => {
     }, [loadData, events]);
 
     const getUserInfo = useCallback((username) => {
+        if (!users || typeof users !== 'object') return null;
         for (const serverUsers of Object.values(users)) {
-            const user = serverUsers.find(u => u.username === username);
+            const user = serverUsers.find(u => u.username && u.username.toLowerCase() === username.toLowerCase());
             if (user) return user;
         }
         return null;
     }, [users]);
-
+    
     const groupedSessions = useMemo(() => {
         const validSessions = sessions.filter(s => s && s.username && (serverFilter === 'all' || s.server === serverFilter));
         const grouped = validSessions.reduce((acc, s) => { (acc[s.username] = acc[s.username] || []).push(s); return acc; }, {});
         return Object.entries(grouped).filter(([user]) => !filter || user.toLowerCase().includes(filter.toLowerCase()) || (getUserInfo(user)?.displayName || '').toLowerCase().includes(filter.toLowerCase()));
     }, [sessions, filter, serverFilter, getUserInfo]);
-    
-    const handleLaunchGuacamole = async (type, session, userInfo) => {
-        if (!session) return;
-        setIsLoading(true);
-        try {
-            const payload = {
-                server: session.server,
-                username: userInfo?.username || session.username,
-                password: userInfo?.password,
-                sessionId: type === 'shadow' ? session.sessionId : null,
-                multiScreen: multiScreenMode,
-            };
-            const response = await apiService.createGuacamoleConnection(payload);
-            setGuacamoleConfig({
-                token: response.token,
-                url: response.url,
-                title: `${type === 'shadow' ? 'Shadow' : 'Connexion'}: ${session.username} sur ${session.server}`
-            });
-        } catch (err) {
-            showNotification('error', `Impossible de lancer la session: ${err.message}`);
-        } finally {
-            setIsLoading(false);
+
+    const handleLaunchShadow = async (session) => {
+        if (!window.electronAPI?.launchRdp) {
+            showNotification('warning', 'Le mode Shadow est uniquement disponible dans l\'application de bureau.');
+            return;
         }
+        if (!session || !session.isActive) {
+            showNotification('warning', 'La session doit être active pour utiliser le mode Shadow.');
+            return;
+        }
+        showNotification('info', `Lancement du mode Shadow pour ${session.username} sur ${session.server}...`);
+        try {
+            const result = await window.electronAPI.launchRdp({ server: session.server, sessionId: session.sessionId });
+            if (!result.success) throw new Error(result.error);
+        } catch (err) { showNotification('error', `Erreur Shadow: ${err.message}`); }
+    };
+
+    const handleLaunchConnect = async (session) => {
+        if (!window.electronAPI?.launchRdp) {
+            showNotification('warning', 'La connexion RDP directe est uniquement disponible dans l\'application de bureau.');
+            return;
+        }
+        if (!session) return;
+        showNotification('info', `Lancement de la connexion RDP vers ${session.server}...`);
+        try {
+            const result = await window.electronAPI.launchRdp({ server: session.server });
+            if (!result.success) throw new Error(result.error);
+        } catch (err) { showNotification('error', `Erreur RDP: ${err.message}`); }
     };
     
     return (
@@ -187,17 +187,13 @@ const SessionsPage = () => {
                     <TableHead><TableRow><TableCell sx={{ width: '16%' }}><PersonIcon sx={{ verticalAlign: 'bottom', mr: 0.5 }}/>Nom Complet</TableCell><TableCell sx={{ width: '12%' }}><VpnKeyIcon sx={{ verticalAlign: 'bottom', mr: 0.5 }}/>Utilisateur</TableCell><TableCell sx={{ width: '13%' }}><DnsIcon sx={{ verticalAlign: 'bottom', mr: 0.5 }}/>Serveurs</TableCell><TableCell sx={{ width: '10%' }}>État</TableCell><TableCell sx={{ width: '11%' }}><TimerIcon sx={{ verticalAlign: 'bottom', mr: 0.5 }}/>Durée</TableCell><TableCell sx={{ width: '14%' }}>Heure Connexion</TableCell><TableCell sx={{ width: '14%' }}>Actions</TableCell></TableRow></TableHead>
                     <TableBody>
                          {groupedSessions.length === 0 && !isLoading ? (<TableRow><TableCell colSpan={7} align="center" sx={{ p: 4 }}><Typography color="text.secondary">Aucune session à afficher.</Typography></TableCell></TableRow>) :
-                         (groupedSessions.map(([user, userSessions]) => (<GroupedUserRow key={user} user={user} sessions={userSessions} onSendMessage={(s) => setDialogState({ type: 'sendMessage', data: s })} onShowInfo={(s, ui) => setDialogState({ type: 'userInfo', data: { ...s, userInfo: ui } })} onShadow={handleLaunchGuacamole.bind(null, 'shadow')} onConnect={handleLaunchGuacamole.bind(null, 'connect')} getUserInfo={getUserInfo} />)))}
+                         (groupedSessions.map(([user, userSessions]) => (<GroupedUserRow key={user} user={user} sessions={userSessions} onSendMessage={(s) => setDialogState({ type: 'sendMessage', data: s })} onShowInfo={(s, ui) => setDialogState({ type: 'userInfo', data: { ...s, userInfo: ui } })} onShadow={handleLaunchShadow} onConnect={handleLaunchConnect} getUserInfo={getUserInfo} />)))}
                     </TableBody>
                 </Table>
             </TableContainer>
             {dialogState.type === 'sendMessage' && <SendMessageDialog open={true} onClose={() => setDialogState({ type: null })} selectedSessions={[`${dialogState.data.server}-${dialogState.data.sessionId}`]} sessions={sessions} />}
             {dialogState.type === 'userInfo' && <UserInfoDialog open={true} onClose={() => setDialogState({ type: null })} user={dialogState.data} />}
             {dialogState.type === 'globalMessage' && <GlobalMessageDialog open={true} onClose={() => setDialogState({ type: null })} servers={config?.rds_servers || []} />}
-            <Dialog fullScreen open={!!guacamoleConfig} onClose={() => setGuacamoleConfig(null)}>
-                <DialogTitle sx={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>{guacamoleConfig?.title}<IconButton onClick={() => setGuacamoleConfig(null)}><CloseIcon /></IconButton></DialogTitle>
-                <DialogContent sx={{ p: 0, overflow: 'hidden' }}>{guacamoleConfig?.token && <GuacamoleViewer token={guacamoleConfig.token} url={guacamoleConfig.url} />}</DialogContent>
-            </Dialog>
         </Box>
     );
 };

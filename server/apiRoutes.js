@@ -1,4 +1,4 @@
-// server/apiRoutes.js - VERSION FINALE, 100% COMPLÈTE ET SANS OMISSIONS
+// server/apiRoutes.js - VERSION FINALE, 100% COMPLÈTE ET SÉCURISÉE
 
 const express = require('express');
 const configService = require('../backend/services/configService');
@@ -10,11 +10,12 @@ const chatService = require('../backend/services/chatService');
 const notificationService = require('../backend/services/notificationService');
 const technicianService = require('../backend/services/technicianService');
 const rdsService = require('../backend/services/rdsService');
-const guacamoleService = require('../backend/services/guacamoleService');
+// SUPPRESSION: L'import de guacamoleService n'est plus nécessaire.
 
 module.exports = (getBroadcast) => {
     const router = express.Router();
 
+    // Middleware pour extraire l'identité du technicien à partir des en-têtes
     const getCurrentTechnician = (req) => {
         const techId = req.headers['x-technician-id'];
         if (!techId) return (configService.appConfig.it_technicians || [])[0];
@@ -22,6 +23,7 @@ module.exports = (getBroadcast) => {
         return tech || (configService.appConfig.it_technicians || [])[0];
     };
 
+    // Wrapper pour gérer les erreurs dans les routes asynchrones
     const asyncHandler = (fn) => (req, res, next) =>
         Promise.resolve(fn(req, res, next)).catch((error) => {
             console.error(`❌ Erreur sur la route ${req.method} ${req.originalUrl}:`, error);
@@ -30,19 +32,16 @@ module.exports = (getBroadcast) => {
 
     // --- DIAGNOSTIC ET SANTÉ ---
     router.get('/health', asyncHandler(async (req, res) => {
-        const configValid = configService.isConfigurationValid();
-        if (!configValid) {
-            // Si la config n'est pas valide, on renvoie une erreur avec un message explicite.
+        if (!configService.isConfigurationValid()) {
             return res.status(503).json({
                 status: 'error',
-                message: 'Le serveur est démarré en mode dégradé en raison d"une configuration invalide. Veuillez consulter les logs du serveur pour plus de détails.',
-                details: 'Les fonctionnalités principales sont désactivées jusqu\'à ce que la configuration soit corrigée.'
+                message: 'Le serveur est en mode dégradé en raison d\'une configuration invalide. Veuillez consulter les logs du serveur pour plus de détails.',
             });
         }
         res.json({ status: 'ok', message: 'Le serveur est opérationnel.' });
     }));
 
-    // --- CONFIG & AUTH ---
+    // --- CONFIGURATION & AUTHENTIFICATION ---
     router.get('/config', asyncHandler(async (req, res) => res.json(configService.getConfig())));
     router.post('/config', asyncHandler(async (req, res) => {
         const result = await configService.saveConfig(req.body.newConfig);
@@ -50,21 +49,17 @@ module.exports = (getBroadcast) => {
         res.json(result);
     }));
 
-    // Si la configuration n'est pas valide, on bloque toutes les autres routes.
-    // C'est une sécurité pour éviter que l'application ne tente d'exécuter
-    // des opérations avec une configuration incomplète ou incorrecte.
+    // --- GARDE-FOU DE CONFIGURATION ---
+    // Si la configuration est invalide, ce middleware bloque toutes les routes suivantes.
+    // C'est une sécurité cruciale pour empêcher l'application de fonctionner dans un état cassé.
     if (!configService.isConfigurationValid()) {
         router.use((req, res, next) => {
-            // Autorise uniquement la route de santé à passer.
-            if (req.path === '/health') {
-                return next();
-            }
             res.status(503).json({
                 error: 'Service Indisponible',
                 message: 'Le serveur est en mode dégradé car la configuration est invalide. Seul le diagnostic est possible.'
             });
         });
-        return router; // On retourne le router avec seulement la route de santé effective.
+        return router; // Retourne le routeur avec uniquement les routes de diagnostic.
     }
 
     // --- TECHNICIENS ---
@@ -84,12 +79,7 @@ module.exports = (getBroadcast) => {
     }));
     router.post('/rds-sessions/send-message', asyncHandler(async (req, res) => res.json(await rdsService.sendMessage(req.body.server, req.body.sessionId, req.body.message))));
     router.get('/rds-sessions/ping/:server', asyncHandler(async (req, res) => res.json(await rdsService.pingServer(req.params.server))));
-    router.post('/rds-sessions/guacamole-token', asyncHandler(async (req, res) => {
-        const { server, username, password, sessionId, multiScreen } = req.body;
-        const token = await guacamoleService.generateConnectionToken({ server, username, password, sessionId, multiScreen });
-        res.json({ token, url: configService.appConfig.guacamole.url });
-    }));
-
+    
     // --- ORDINATEURS (COMPUTERS) ---
     router.get('/computers', asyncHandler(async (req, res) => res.json(await dataService.getComputers())));
     router.post('/computers', asyncHandler(async (req, res) => {
@@ -220,7 +210,6 @@ module.exports = (getBroadcast) => {
         res.json(result);
     }));
     router.delete('/chat/messages/:messageId', asyncHandler(async (req, res) => {
-        // Le channelId doit être dans le body pour la sécurité
         const { channelId } = req.body;
         const result = await chatService.deleteMessage(req.params.messageId, channelId, getCurrentTechnician(req));
         getBroadcast()({ type: 'chat_message_deleted', payload: { messageId: req.params.messageId, channelId } });
