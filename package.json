@@ -9,10 +9,15 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "server:dev": "nodemon server/server.js",
+    "server:start": "node server/server.js",
     "dev": "concurrently \"npm run server:dev\" \"npm start\"",
     "electron:dev": "electron .",
     "electron:build:portable": "npm run build && electron-builder --win portable",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test:app": "concurrently --names \"SERVER,REACT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run server:start\" \"npm start\"",
+    "build:exe": "npm run build && electron-builder --win portable --config",
+    "build:quick": "react-scripts build && electron-builder --win portable --config",
+    "clean": "rimraf build dist node_modules/.cache"
   },
   "build": {
     "appId": "com.anecoop.rds-viewer",
