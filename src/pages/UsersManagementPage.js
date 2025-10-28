@@ -24,57 +24,21 @@ import apiService from '../services/apiService';
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
 import AdActionsDialog from '../components/AdActionsDialog';
+import PasswordCompact from '../components/PasswordCompact';
+import CopyableText from '../components/CopyableText';
 
 const debounce = (func, wait) => {
     let timeout;
     return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func(...args), wait); };
 };
 
-const CopyableText = memo(({ text }) => {
-    const [copied, setCopied] = useState(false);
-    const copyToClipboard = useCallback(async () => {
-        if (!text) return;
-        try {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-        } catch (err) { console.error('Erreur copie:', err); }
-    }, [text]);
-
-    return (
-        <Tooltip title={copied ? 'Copié!' : 'Copier dans le presse-papiers'}>
-            <Box onClick={copyToClipboard} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover .copy-icon': { opacity: 1 } }}>
-                <Typography variant="body2" noWrap>{text || '-'}</Typography>
-                <ContentCopyIcon className="copy-icon" sx={{ fontSize: '14px', color: 'text.secondary', opacity: copied ? 1 : 0 }} color={copied ? 'success' : 'inherit'} />
-            </Box>
-        </Tooltip>
-    );
-});
-
-const PasswordCompact = memo(({ password }) => {
-    const [isVisible, setIsVisible] = useState(false);
-    if (!password) return <Typography variant="caption" color="text.secondary">-</Typography>;
-    return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="body2" sx={{ fontFamily: 'monospace', minWidth: '80px' }}>
-                {isVisible ? password : '••••••••'}
-            </Typography>
-            <Tooltip title={isVisible ? 'Masquer' : 'Afficher'}>
-                <IconButton size="small" onClick={() => setIsVisible(!isVisible)} sx={{ p: 0.1 }}>
-                    {isVisible ? <VisibilityOff sx={{ fontSize: '14px' }} /> : <Visibility sx={{ fontSize: '14px' }} />}
-                </IconButton>
-            </Tooltip>
-            <CopyableText text={password} />
-        </Box>
-    );
-});
-
 const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     const isVpn = groupName === 'VPN';
     const icon = isVpn ? <VpnKeyIcon sx={{ fontSize: '14px' }} /> : <LanguageIcon sx={{ fontSize: '14px' }} />;
     const displayName = isVpn ? 'VPN' : 'INT';
+    const fullGroupName = isVpn ? 'VPN' : 'Sortants_responsables (Internet)';
     return (
-        <Tooltip title={`${isMember ? 'Retirer de' : 'Ajouter à'} ${groupDisplayName || groupName}`}>
+        <Tooltip title={`${isMember ? 'Retirer de' : 'Ajouter à'} ${fullGroupName}`}>
             <Chip
                 size="small"
                 icon={isLoading ? <CircularProgress size={14} color="inherit" /> : icon}
@@ -110,7 +74,10 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onPrint
             <Box sx={{ flex: '1 1 150px', minWidth: 120, overflow: 'hidden' }}><Typography variant="body2" fontWeight="bold" noWrap>{user.displayName}</Typography><CopyableText text={user.username} /></Box>
             <Box sx={{ flex: '0.8 1 100px', minWidth: 80 }}><Typography variant="body2">{user.department || '-'}</Typography></Box>
             <Box sx={{ flex: '1.2 1 180px', minWidth: 150, overflow: 'hidden' }}><CopyableText text={user.email} /></Box>
-            <Box sx={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 0.5 }}><PasswordCompact password={user.password} /><PasswordCompact password={user.officePassword} /></Box>
+            <Box sx={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <PasswordCompact password={user.password} label="RDS" />
+                {user.officePassword && <PasswordCompact password={user.officePassword} label="Office" />}
+            </Box>
             <Box sx={{ flex: '1 1 120px', minWidth: 100, display: 'flex', gap: 1 }}><AdGroupBadge groupName="VPN" isMember={vpnMembers.has(user.username)} onToggle={() => toggleGroup('VPN', vpnMembers.has(user.username), setIsUpdatingVpn)} isLoading={isUpdatingVpn} /><AdGroupBadge groupName="Sortants_responsables" isMember={internetMembers.has(user.username)} onToggle={() => toggleGroup('Sortants_responsables', internetMembers.has(user.username), setIsUpdatingInternet)} isLoading={isUpdatingInternet} /></Box>
             <Box sx={{ flex: '0 0 auto', display: 'flex' }}>
                 <Tooltip title="Connexion RDP (app bureau)"><IconButton size="small" onClick={() => onConnect(user)} disabled={!window.electronAPI}><LaunchIcon /></IconButton></Tooltip>
@@ -191,12 +158,34 @@ const UsersManagementPage = () => {
 
     const filteredUsers = useMemo(() => {
         let result = users;
-        if (serverFilter !== 'all') result = result.filter(u => u.server === serverFilter);
-        if (departmentFilter !== 'all') result = result.filter(u => u.department === departmentFilter);
+
+        // Filtre par serveur
+        if (serverFilter !== 'all') {
+            result = result.filter(u => u.server === serverFilter);
+        }
+
+        // Filtre par service/département
+        if (departmentFilter !== 'all') {
+            result = result.filter(u => u.department === departmentFilter);
+        }
+
+        // Filtre par recherche textuelle (amélioration: recherche ciblée)
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            result = result.filter(u => Object.values(u).some(val => String(val).toLowerCase().includes(term)));
+            result = result.filter(u => {
+                const searchFields = [
+                    u.displayName,
+                    u.username,
+                    u.email,
+                    u.department,
+                    u.server
+                ];
+                return searchFields.some(field =>
+                    field && String(field).toLowerCase().includes(term)
+                );
+            });
         }
+
         return result;
     }, [users, searchTerm, serverFilter, departmentFilter]);
 
