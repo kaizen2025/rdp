@@ -29,6 +29,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 
 import { useApp } from '../contexts/AppContext';
+import apiService from '../services/apiService';
 
 // Sous-composant pour la réinitialisation du mot de passe
 const PasswordResetDialog = ({ user, onComplete, onClose }) => {
@@ -58,11 +59,11 @@ const PasswordResetDialog = ({ user, onComplete, onClose }) => {
         setError('');
         try {
             // 1. Réinitialiser dans AD
-            const adResult = await window.electronAPI.resetAdUserPassword(user.username, generatedPassword, false);
+            const adResult = await apiService.resetAdUserPassword(user.username, generatedPassword, false);
             if (!adResult.success) throw new Error(`AD: ${adResult.error}`);
 
             // 2. Mettre à jour dans Excel
-            const excelResult = await window.electronAPI.saveUserToExcel({
+            const excelResult = await apiService.saveUserToExcel({
                 user: { ...user, password: generatedPassword, officePassword: user.officePassword || generatedPassword },
                 isEdit: true
             });
@@ -71,7 +72,7 @@ const PasswordResetDialog = ({ user, onComplete, onClose }) => {
             } else {
                 showNotification('success', `Mot de passe pour ${user.username} réinitialisé et mis à jour.`);
             }
-            
+
             onComplete();
         } catch (err) {
             setError(err.message);
@@ -155,7 +156,7 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
         if (!user) return;
         setIsLoading(true);
         try {
-            const result = await window.electronAPI.getAdUserDetails(user.username);
+            const result = await apiService.getAdUserDetails(user.username);
             if (result.success) {
                 setDetails(result);
             } else {
@@ -176,14 +177,16 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
 
     const handleToggleAccountStatus = async () => {
         const isEnabled = details?.user?.enabled;
-        const action = isEnabled ? 'disableAdUser' : 'enableAdUser';
         const actionText = isEnabled ? 'désactivé' : 'activé';
 
         if (!window.confirm(`Voulez-vous vraiment ${isEnabled ? 'DÉSACTIVER' : 'ACTIVER'} le compte ${user.username} ?`)) return;
 
         setIsActionLoading(true);
         try {
-            const result = await window.electronAPI[action](user.username);
+            const result = isEnabled
+                ? await apiService.disableAdUser(user.username)
+                : await apiService.enableAdUser(user.username);
+
             if (result.success) {
                 showNotification('success', `Compte ${actionText} avec succès.`);
                 onActionComplete(); // Déclenche le rafraîchissement

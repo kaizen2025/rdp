@@ -1,8 +1,8 @@
-// src/App.js - VERSION AVEC VÉRIFICATION DE SANTÉ DU SERVEUR
+// src/App.js - VERSION AVEC VÉRIFICATION DE SANTÉ DU SERVEUR ET THÈME MODERNE
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Box from '@mui/material/Box';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -16,11 +16,8 @@ import { AppProvider } from './contexts/AppContext';
 import { CacheProvider } from './contexts/CacheContext';
 import LoginPage from './pages/LoginPage';
 import MainLayout from './layouts/MainLayout';
-import apiService from './services/apiService'; // Importer le service API
-
-const theme = createTheme({
-    // ... (thème inchangé)
-});
+import apiService from './services/apiService';
+import theme from './styles/theme'; // Importer le nouveau thème moderne
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
