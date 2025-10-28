@@ -1,4 +1,4 @@
-// server/server.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
+// server/server.js - VERSION AVEC GESTION AUTOMATIQUE DES PORTS
 
 const express = require('express');
 const cors = require('cors');
@@ -15,27 +15,43 @@ const dataService = require('../backend/services/dataService');
 const rdsService = require('../backend/services/rdsService');
 const technicianService = require('../backend/services/technicianService');
 const apiRoutes = require('./apiRoutes');
+const { findAllPorts, savePorts } = require('../backend/utils/portUtils');
 
-const API_PORT = 3002;
-const WS_PORT = 3003;
+// Ports par défaut (seront ajustés automatiquement si occupés)
+let API_PORT = 3002;
+let WS_PORT = 3003;
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ port: WS_PORT });
+let wss; // Sera initialisé après allocation des ports
 
 console.log("=============================================");
 console.log(" Démarrage du serveur RDS Viewer...");
 console.log("=============================================");
 
-const allowedOrigins = [
-  'http://localhost:3000',  // Port de développement React
-  `http://localhost:${API_PORT}`,  // Port de production
-  `http://192.168.1.232:${API_PORT}`,
-  `http://${os.hostname()}:${API_PORT}`,
-];
+// Fonction pour obtenir les origines autorisées (sera appelée après allocation des ports)
+function getAllowedOrigins() {
+  return [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+    'http://localhost:3004',
+    'http://localhost:3005',
+    'http://localhost:3006',
+    'http://localhost:3007',
+    'http://localhost:3008',
+    'http://localhost:3009',
+    'http://localhost:3010',
+    `http://localhost:${API_PORT}`,
+    `http://192.168.1.232:${API_PORT}`,
+    `http://${os.hostname()}:${API_PORT}`,
+  ];
+}
 
 app.use(cors({
   origin: function (origin, callback) {
+    const allowedOrigins = getAllowedOrigins();
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -46,13 +62,24 @@ app.use(cors({
 }));
 app.use(express.json());
 
-wss.on('connection', ws => {
-  console.log('🔌 Nouveau client WebSocket connecté.');
-  ws.on('close', () => console.log('🔌 Client WebSocket déconnecté.'));
-  ws.on('error', (error) => console.error('❌ Erreur WebSocket:', error));
-});
+// Fonction pour initialiser WebSocket (sera appelée après allocation des ports)
+function initializeWebSocket() {
+  wss = new WebSocketServer({ port: WS_PORT });
+
+  wss.on('connection', ws => {
+    console.log('🔌 Nouveau client WebSocket connecté.');
+    ws.on('close', () => console.log('🔌 Client WebSocket déconnecté.'));
+    ws.on('error', (error) => console.error('❌ Erreur WebSocket:', error));
+  });
+
+  console.log(`✅ WebSocket initialisé sur le port ${WS_PORT}`);
+}
 
 function broadcast(data) {
+  if (!wss) {
+    console.warn('⚠️  WebSocket non initialisé, broadcast ignoré');
+    return;
+  }
   const jsonData = JSON.stringify(data);
   console.log(`🚀 Diffusion WebSocket : type=${data.type}, entity=${data.payload?.entity}`);
   wss.clients.forEach(client => {
@@ -116,6 +143,28 @@ function startBackgroundTasks() {
 
 async function startServer() {
     try {
+        // ========================================
+        // ÉTAPE 1 : ALLOCATION AUTOMATIQUE DES PORTS
+        // ========================================
+        console.log('\n🔧 Allocation automatique des ports...\n');
+
+        const ports = await findAllPorts({
+            http: { start: 3002, end: 3012, name: 'HTTP Server' },
+            websocket: { start: 3003, end: 3013, name: 'WebSocket' }
+        });
+
+        // Mettre à jour les ports globaux
+        API_PORT = ports.http;
+        WS_PORT = ports.websocket;
+
+        // Sauvegarder les ports pour que React puisse les lire
+        await savePorts(ports);
+
+        console.log('✅ Ports alloués avec succès\n');
+
+        // ========================================
+        // ÉTAPE 2 : CHARGEMENT DE LA CONFIGURATION
+        // ========================================
         await configService.loadConfigAsync();
 
         // La validation se fait maintenant à l'intérieur de loadConfigAsync.
@@ -125,8 +174,13 @@ async function startServer() {
 
             // On expose quand même un endpoint de santé pour que le frontend puisse afficher un message clair.
             app.use('/api', apiRoutes(() => broadcast));
+
+            // Initialiser WebSocket même en mode dégradé
+            initializeWebSocket();
+
             server.listen(API_PORT, () => {
                 console.log(`\n📡 Serveur démarré en mode dégradé sur http://localhost:${API_PORT}`);
+                console.log(`   WebSocket actif sur ws://localhost:${WS_PORT}`);
                 console.log("   Seul le diagnostic de configuration est actif.");
             });
             return; // Arrêter le processus de démarrage normal ici.
@@ -134,12 +188,26 @@ async function startServer() {
 
         console.log('✅ Configuration chargée et validée.');
 
+        // ========================================
+        // ÉTAPE 3 : CONNEXION À LA BASE DE DONNÉES
+        // ========================================
         databaseService.connect();
         console.log('✅ Base de données connectée.');
 
+        // ========================================
+        // ÉTAPE 4 : INITIALISATION WEBSOCKET
+        // ========================================
+        initializeWebSocket();
+
+        // ========================================
+        // ÉTAPE 5 : CONFIGURATION DES ROUTES API
+        // ========================================
         app.use('/api', apiRoutes(() => broadcast));
         console.log('✅ Routes API configurées.');
 
+        // ========================================
+        // ÉTAPE 6 : DÉMARRAGE DES TÂCHES DE FOND
+        // ========================================
         startBackgroundTasks();
 
         const buildPath = path.join(__dirname, '..', 'build');
