@@ -29,6 +29,8 @@ const GuacamoleViewer = ({ token, url }) => {
         const wsUrl = new URL(url);
         wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
         wsUrl.pathname += (wsUrl.pathname.endsWith('/') ? '' : '/') + 'websocket-tunnel';
+        // Guacamole 1.6.0+ : Le token doit être dans le hash (#) au lieu des query parameters (?)
+        wsUrl.hash = `token=${encodeURIComponent(token)}`;
 
         const tunnel = new Guacamole.WebSocketTunnel(wsUrl.toString());
         const client = new Guacamole.Client(tunnel);
@@ -66,7 +68,8 @@ const GuacamoleViewer = ({ token, url }) => {
         displayElement.innerHTML = '';
         displayElement.appendChild(client.getDisplay().getElement());
 
-        client.connect(`token=${encodeURIComponent(token)}`);
+        // Plus besoin de passer le token dans connect() car il est déjà dans l'URL
+        client.connect();
 
         // Gestion des changements d'état
         client.onstatechange = (state) => {

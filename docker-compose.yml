@@ -2,7 +2,7 @@
 
 services:
   guacd:
-    image: guacamole/guacd:1.5.3 # Fixer les versions est une bonne pratique
+    image: guacamole/guacd:1.6.0 # Version 1.6.0 avec correctifs auth-json
     container_name: rds-viewer-guacd
     restart: unless-stopped
     volumes:
@@ -28,7 +28,7 @@ services:
       - guacamole-network
 
   guacamole:
-    image: guacamole/guacamole:1.5.3 # Utiliser la même version que l'extension
+    image: guacamole/guacamole:1.6.0 # Version 1.6.0 avec correctifs auth-json
     container_name: rds-viewer-guacamole
     restart: unless-stopped
     ports:
