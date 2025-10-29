@@ -7,17 +7,19 @@
   "homepage": "./",
   "scripts": {
     "start": "react-scripts start",
+    "start:auto": "node scripts/start-react.js",
     "build": "react-scripts build",
     "server:dev": "nodemon server/server.js",
     "server:start": "node server/server.js",
-    "dev": "concurrently \"npm run server:dev\" \"npm start\"",
+    "dev": "concurrently \"npm run server:dev\" \"npm run start:auto\"",
     "electron:dev": "electron .",
     "electron:build:portable": "npm run build && electron-builder --win portable",
     "postinstall": "electron-builder install-app-deps",
-    "test:app": "concurrently --names \"SERVER,REACT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run server:start\" \"npm start\"",
+    "test:app": "concurrently --names \"SERVER,REACT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run server:start\" \"npm run start:auto\"",
+    "test:app:simple": "concurrently \"npm run server:start\" \"npm run start:auto\"",
     "build:exe": "npm run build && electron-builder --win portable --config",
     "build:quick": "react-scripts build && electron-builder --win portable --config",
-    "clean": "rimraf build dist node_modules/.cache"
+    "clean": "rimraf build dist node_modules/.cache .ports.json .env.local"
   },
   "build": {
     "appId": "com.anecoop.rds-viewer",

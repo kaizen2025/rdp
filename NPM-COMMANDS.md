@@ -4,19 +4,56 @@
 
 ### 🧪 **Tester l'Application**
 
-#### Test Complet (Une Commande)
+#### Test Complet avec Allocation Automatique des Ports (Recommandé)
 ```bash
 npm run test:app
 ```
-**Description** : Lance le serveur Node.js ET l'interface React simultanément avec des couleurs distinctes.
-- 🔵 **SERVER** : Serveur backend (port 3002)
-- 🟣 **REACT** : Interface utilisateur (port 3000)
+**Description** : Lance le serveur Node.js ET l'interface React simultanément avec **allocation automatique des ports**.
+- 🔵 **SERVER** : Serveur backend (ports 3002-3012, premier disponible)
+- 🟣 **REACT** : Interface utilisateur (ports 3000-3010, premier disponible)
+
+**✨ Nouveauté - Gestion Automatique des Ports** :
+- ✅ **Détection automatique** : Si un port est occupé, le suivant est testé
+- ✅ **Pas de conflit** : Plus besoin de tuer les processus manuellement
+- ✅ **Configuration auto** : React se configure automatiquement pour le bon serveur
+- ✅ **Logs clairs** : Affichage des ports utilisés au démarrage
 
 **Utilisation** :
 - Cette commande lance tout ce dont vous avez besoin pour tester l'app
-- Le serveur démarre automatiquement la base de données
-- L'interface React s'ouvre dans votre navigateur
-- Les deux processus tournent en parallèle
+- Le serveur alloue automatiquement les ports disponibles
+- L'interface React attend le serveur puis se configure automatiquement
+- Les deux processus tournent en parallèle avec leur port respectif
+
+**Exemple de sortie** :
+```
+🔧 Allocation automatique des ports...
+   Plage testée : 3002-3012
+✅ Port 3002 disponible pour HTTP Server
+   Plage testée : 3003-3013
+✅ Port 3003 disponible pour WebSocket
+
+⏳ Attente du démarrage du serveur backend...
+✅ Serveur backend détecté
+
+📖 Configuration des ports lue:
+   • Serveur HTTP  : 3002
+   • WebSocket     : 3003
+
+🔍 Recherche d'un port disponible pour React...
+✅ Port React: 3000
+
+📝 Configuration de .env.local...
+✅ .env.local créé avec succès
+   React sera sur: http://localhost:3000
+   API sera sur  : http://localhost:3002
+   WebSocket sur : ws://localhost:3003
+```
+
+#### Test Simple (Sans Couleurs)
+```bash
+npm run test:app:simple
+```
+**Description** : Même fonctionnement que `test:app` mais sans les couleurs dans les logs (utile pour certains terminaux).
 
 ---
 
