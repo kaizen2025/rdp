@@ -38,17 +38,39 @@ async function readExcelFileAsync() {
         const sheetName = workbook.SheetNames[0];
         const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false, defval: '' });
 
+        // Log des en-têtes du fichier Excel pour diagnostic
+        if (data.length > 0) {
+            const excelHeaders = Object.keys(data[0]);
+            console.log('📋 En-têtes Excel détectés:', excelHeaders);
+            console.log('🔧 Mapping configuré:', config.excelColumnMapping);
+        }
+
         const columnMapping = config.excelColumnMapping;
         if (!columnMapping || !columnMapping['Identifiant'] || !columnMapping['Nom complet']) {
              throw new Error("La section 'excelColumnMapping' dans config.json est manquante ou incomplète. 'Identifiant' et 'Nom complet' sont requis.");
         }
 
-        const usersByServer = data.reduce((acc, row) => {
+        const usersByServer = data.reduce((acc, row, index) => {
             const user = {};
             for (const [header, key] of Object.entries(columnMapping)) {
-                if (row[header] !== undefined) {
+                if (row[header] !== undefined && row[header] !== null && row[header] !== '') {
                     user[key] = String(row[header]).trim();
+                } else {
+                    // Initialiser avec une chaîne vide pour éviter undefined
+                    user[key] = '';
                 }
+            }
+
+            // Log de debug pour les 3 premiers utilisateurs
+            if (index < 3) {
+                console.log(`📋 DEBUG Utilisateur ${index + 1}:`, {
+                    username: user.username,
+                    displayName: user.displayName,
+                    password: user.password ? '✓ (défini)' : '✗ (vide)',
+                    officePassword: user.officePassword ? '✓ (défini)' : '✗ (vide)',
+                    email: user.email,
+                    server: user.server
+                });
             }
 
             if (user.username) {

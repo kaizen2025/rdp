@@ -80,7 +80,7 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onConne
             <Box sx={{ flex: '1.2 1 180px', minWidth: 150, overflow: 'hidden' }}><CopyableText text={user.email} /></Box>
             <Box sx={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                 <PasswordCompact password={user.password} label="RDS" />
-                {user.officePassword && <PasswordCompact password={user.officePassword} label="Office" />}
+                <PasswordCompact password={user.officePassword} label="Office" />
             </Box>
             <Box sx={{ flex: '1 1 120px', minWidth: 100, display: 'flex', gap: 1 }}><AdGroupBadge groupName="VPN" isMember={vpnMembers.has(user.username)} onToggle={() => toggleGroup('VPN', vpnMembers.has(user.username), setIsUpdatingVpn)} isLoading={isUpdatingVpn} /><AdGroupBadge groupName="Sortants_responsables" isMember={internetMembers.has(user.username)} onToggle={() => toggleGroup('Sortants_responsables', internetMembers.has(user.username), setIsUpdatingInternet)} isLoading={isUpdatingInternet} /></Box>
             <Box sx={{ flex: '0 0 auto', display: 'flex' }}>
@@ -148,6 +148,20 @@ const UsersManagementPage = () => {
             // On doit aplatir cet objet en un seul tableau.
             if (data?.success && typeof data.users === 'object' && data.users !== null) {
                 const allUsers = Object.values(data.users).flat();
+
+                // Log de debug pour les 2 premiers utilisateurs
+                console.log('📊 DEBUG Frontend - Utilisateurs chargés:', {
+                    total: allUsers.length,
+                    exemples: allUsers.slice(0, 2).map(u => ({
+                        username: u.username,
+                        displayName: u.displayName,
+                        hasPassword: !!u.password,
+                        hasOfficePassword: !!u.officePassword,
+                        passwordValue: u.password ? `${u.password.substring(0, 3)}***` : 'vide',
+                        officePasswordValue: u.officePassword ? `${u.officePassword.substring(0, 3)}***` : 'vide'
+                    }))
+                });
+
                 setUsers(allUsers);
             } else {
                 setUsers([]);
