@@ -102,15 +102,23 @@ function createWindow() {
 // Configuration de l'auto-updater
 function setupAutoUpdater() {
     try {
-        const configPath = path.join(app.getAppPath(), 'config', 'config.json');
-        const configData = fs.readFileSync(configPath, 'utf-8');
-        const config = JSON.parse(configData);
-        
-        if (config.updateUrl) {
-            log.info(`[Updater] URL de mise à jour personnalisée trouvée: ${config.updateUrl}`);
-            autoUpdater.setFeedURL(config.updateUrl);
+        // En production, le chemin est relatif à l'exécutable
+        const configPath = isDev
+            ? path.join(__dirname, '..', 'config', 'config.json')
+            : path.join(path.dirname(app.getPath('exe')), 'config', 'config.json');
+
+        if (fs.existsSync(configPath)) {
+            const configData = fs.readFileSync(configPath, 'utf-8');
+            const config = JSON.parse(configData);
+            
+            if (config.updateUrl) {
+                log.info(`[Updater] URL de mise à jour personnalisée trouvée: ${config.updateUrl}`);
+                autoUpdater.setFeedURL(config.updateUrl);
+            } else {
+                log.warn('[Updater] Aucune URL de mise à jour personnalisée trouvée. Utilisation de la configuration par défaut.');
+            }
         } else {
-            log.warn('[Updater] Aucune URL de mise à jour personnalisée trouvée. Utilisation de la configuration par défaut.');
+            log.warn(`[Updater] Fichier de configuration non trouvé à ${configPath}. Utilisation de la configuration par défaut.`);
         }
     } catch (error) {
         log.error('[Updater] Erreur lors de la lecture de config.json pour l\'URL de mise à jour. Utilisation de la configuration par défaut.', error);
@@ -194,65 +202,42 @@ function setupIpcHandlers() {
                 `full address:s:${server}`,
                 `username:s:${username}`,
                 'prompt for credentials:i:0',
-                'authentication level:i:0',
-                'enablecredsspsupport:i:1',
-                'disable wallpaper:i:0',
-                'allow font smoothing:i:1',
-                'allow desktop composition:i:1',
-                'disable full window drag:i:0',
-                'disable menu anims:i:0',
-                'disable themes:i:0',
-                'disable cursor setting:i:0',
-                'bitmapcachepersistenable:i:1',
-                'audiomode:i:0',
-                'redirectprinters:i:1',
-                'redirectcomports:i:0',
-                'redirectsmartcards:i:1',
-                'redirectclipboard:i:1',
-                'redirectposdevices:i:0',
-                'autoreconnection enabled:i:1',
-                'negotiate security layer:i:1',
-                'remoteapplicationmode:i:0',
-                'alternate shell:s:',
-                'shell working directory:s:',
-                'gatewayhostname:s:',
-                'gatewayusagemethod:i:0',
-                'gatewaycredentialssource:i:0',
-                'gatewayprofileusagemethod:i:0',
-                'promptcredentialonce:i:0',
-                'use redirection server name:i:0',
-                'loadbalanceinfo:s:',
-                'drivestoredirect:s:'
+                'authentication level:i:2', // Niveau 2 pour plus de compatibilité
+                'enablecredsspsupport:i:1'
             ].join('\r\n');
 
             try {
                 fs.writeFileSync(rdpFilePath, rdpContent);
                 log.info(`[RDP] Fichier RDP créé: ${rdpFilePath} pour ${username}@${server}`);
 
-                // Lancer mstsc avec le fichier RDP
-                const command = `mstsc.exe "${rdpFilePath}"`;
-                log.info(`[RDP] Lancement de: ${command}`);
+                // Lancer mstsc avec le fichier RDP et le mot de passe via cmdkey
+                const cmdkeyCommand = `cmdkey /generic:"TERMSRV/${server}" /user:"${username}" /pass:"${password}"`;
+                const mstscCommand = `mstsc.exe "${rdpFilePath}"`;
+
+                log.info(`[RDP] Ajout des identifiants: ${cmdkeyCommand}`);
+                log.info(`[RDP] Lancement de: ${mstscCommand}`);
 
                 return new Promise((resolve) => {
-                    exec(command, (error) => {
-                        // Supprimer le fichier RDP après un délai
-                        setTimeout(() => {
-                            try {
-                                if (fs.existsSync(rdpFilePath)) {
-                                    fs.unlinkSync(rdpFilePath);
-                                    log.info(`[RDP] Fichier RDP supprimé: ${rdpFilePath}`);
-                                }
-                            } catch (err) {
-                                log.error(`[RDP] Erreur lors de la suppression du fichier RDP: ${err.message}`);
-                            }
-                        }, 5000);
-
+                    exec(cmdkeyCommand, (error) => {
                         if (error) {
-                            log.error(`[RDP] Erreur: ${error.message}`);
-                            resolve({ success: false, error: error.message });
-                        } else {
-                            resolve({ success: true });
+                            log.error(`[RDP] Erreur cmdkey: ${error.message}`);
+                            // On continue quand même, mstsc demandera le mot de passe
                         }
+                        
+                        exec(mstscCommand, (mstscError) => {
+                            // Supprimer la clé après un délai pour ne pas la laisser
+                            setTimeout(() => {
+                                exec(`cmdkey /delete:"TERMSRV/${server}"`);
+                                if (fs.existsSync(rdpFilePath)) fs.unlinkSync(rdpFilePath);
+                            }, 10000);
+
+                            if (mstscError) {
+                                log.error(`[RDP] Erreur mstsc: ${mstscError.message}`);
+                                resolve({ success: false, error: mstscError.message });
+                            } else {
+                                resolve({ success: true });
+                            }
+                        });
                     });
                 });
             } catch (error) {
@@ -261,9 +246,9 @@ function setupIpcHandlers() {
             }
         }
 
-        // Mode normal sans identifiants
+        // Mode normal sans identifiants (shadowing ou connexion simple)
         const command = sessionId
-            ? `mstsc.exe /shadow:${sessionId} /v:${server} /control`
+            ? `mstsc.exe /shadow:${sessionId} /v:${server} /control /prompt`
             : `mstsc.exe /v:${server}`;
 
         log.info(`[RDP] Lancement de: ${command}`);

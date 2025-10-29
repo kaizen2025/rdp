@@ -1,4 +1,4 @@
-// src/pages/ComputerLoansPage.js - VERSION NETTOYÉE (logique notif déplacée)
+// src/pages/ComputerLoansPage.js - VERSION RESTRUCTURÉE
 
 import React, { useState, useCallback, Suspense, lazy } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -17,7 +17,6 @@ import { fr } from 'date-fns/locale';
 import { useApp } from '../contexts/AppContext';
 
 // Icons
-import LaptopIcon from '@mui/icons-material/Laptop';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
@@ -25,15 +24,14 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import HistoryIcon from '@mui/icons-material/History';
 import ComputerIcon from '@mui/icons-material/Computer';
-import MouseIcon from '@mui/icons-material/Mouse';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 // Lazy load
 const LoanList = lazy(() => import('../components/loan-management/LoanList'));
-const ComputerList = lazy(() => import('../components/loan-management/ComputerList'));
+const ComputersPage = lazy(() => import('../pages/ComputersPage')); // Renommé pour la clarté
 const LoansCalendar = lazy(() => import('../pages/LoansCalendar'));
 const UserLoanHistoryPage = lazy(() => import('../pages/UserLoanHistoryPage'));
 const ComputerLoanHistoryPage = lazy(() => import('../pages/ComputerLoanHistoryPage'));
-const AccessoriesManagement = lazy(() => import('../pages/AccessoriesManagement'));
 const LoanStatisticsDialog = lazy(() => import('../components/LoanStatisticsDialog'));
 
 const LoadingFallback = () => (<Box sx={{ p: 4, display: 'flex', justifyContent: 'center', minHeight: '50vh' }}><CircularProgress /></Box>);
@@ -66,8 +64,8 @@ const ComputerLoansPage = () => {
     const handleForceRefresh = useCallback(() => {
         setRefreshKey(prevKey => prevKey + 1);
         showNotification('info', 'Rafraîchissement des données en cours...');
-        // On peut aussi émettre un événement pour forcer les enfants à re-fetch
         events.emit('force_refresh:loans');
+        events.emit('force_refresh:computers');
     }, [showNotification, events]);
 
     return (
@@ -75,7 +73,7 @@ const ComputerLoansPage = () => {
             <Box sx={{ p: 2 }}>
                 <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Typography variant="h5">Gestion des Prêts</Typography>
+                        <Typography variant="h5">Gestion des Prêts et du Matériel</Typography>
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <Tooltip title="Statistiques"><IconButton onClick={() => setStatisticsDialogOpen(true)}><BarChartIcon /></IconButton></Tooltip>
                             <Tooltip title="Actualiser les données"><IconButton onClick={handleForceRefresh}><RefreshIcon /></IconButton></Tooltip>
@@ -85,17 +83,15 @@ const ComputerLoansPage = () => {
                 <Paper elevation={3}>
                     <Tabs value={currentTab} onChange={(e, v) => setCurrentTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile>
                         <Tab icon={<AssignmentIcon />} iconPosition="start" label="Suivi des Prêts" />
-                        <Tab icon={<LaptopIcon />} iconPosition="start" label="Inventaire Matériel" />
+                        <Tab icon={<InventoryIcon />} iconPosition="start" label="Inventaire Matériel" />
                         <Tab icon={<CalendarMonthIcon />} iconPosition="start" label="Calendrier" />
                         <Tab icon={<HistoryIcon />} iconPosition="start" label="Historique" />
-                        <Tab icon={<MouseIcon />} iconPosition="start" label="Accessoires" />
                     </Tabs>
                     <Suspense fallback={<LoadingFallback />}>
                         {currentTab === 0 && <LoanList key={refreshKey} preFilter={location.state?.preFilter} />}
-                        {currentTab === 1 && <ComputerList key={refreshKey} />}
+                        {currentTab === 1 && <ComputersPage key={refreshKey} />}
                         {currentTab === 2 && <LoansCalendar key={refreshKey} />}
                         {currentTab === 3 && <HistoryTab key={refreshKey} />}
-                        {currentTab === 4 && <AccessoriesManagement key={refreshKey} />}
                     </Suspense>
                 </Paper>
                 <Suspense fallback={<div />}>

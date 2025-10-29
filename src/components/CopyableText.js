@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, memo } from 'react';
 import { Box, Typography, Tooltip } from '@mui/material';
-import { ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+// CORRECTION: Importation par défaut de l'icône
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 /**
  * Composant pour afficher du texte avec possibilité de copie

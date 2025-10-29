@@ -183,7 +183,7 @@ function connect() {
     if (db) return;
 
     const dbPath = configService.appConfig.databasePath || 
-                   path.join(path.dirname(configService.appConfig.defaultExcelPath), 'rds_viewer_data.sqlite');
+                   path.join(path.dirname(configService.appConfig.excelFilePath), 'rds_viewer_data.sqlite');
     
     const dbExists = fs.existsSync(dbPath);
 
@@ -197,13 +197,11 @@ function connect() {
         db = new Database(dbPath, { /* verbose: console.log */ });
         
         // AMÉLIORATION CONCURRENCE: WAL (Write-Ahead Logging) mode
-        // Permet à plusieurs lecteurs d'accéder à la base pendant qu'un processus écrit. Crucial pour un partage réseau.
         db.pragma('journal_mode = WAL');
         
         // Appliquer le schéma pour créer les tables si elles n'existent pas
         db.exec(schema);
 
-        // Si la base de données vient d'être créée, on la peuple avec des données initiales
         if (!dbExists) {
             console.log('Nouvelle base de données créée. Initialisation des données par défaut...');
             initializeDefaultData();
@@ -212,17 +210,16 @@ function connect() {
         console.log(`✅ Base de données SQLite connectée : ${dbPath}`);
     } catch (error) {
         console.error("❌ Erreur de connexion à la base de données SQLite:", error);
-        throw error; // Propage l'erreur pour arrêter l'application si la DB est inaccessible
+        throw error;
     }
 }
 
 /**
- * Peuple la base de données avec les données initiales nécessaires au bon fonctionnement.
+ * Peuple la base de données avec les données initiales.
  */
 function initializeDefaultData() {
     const now = new Date().toISOString();
     const transaction = db.transaction(() => {
-        // Canaux de chat par défaut
         const channels = [
             { id: 'general', name: 'Général', description: 'Canal de discussion principal.' },
             { id: 'maintenance', name: 'Annonces Maintenance', description: 'Annonces importantes.' },
@@ -231,7 +228,6 @@ function initializeDefaultData() {
         const insertChannel = db.prepare('INSERT OR IGNORE INTO chat_channels (id, name, description, createdAt, createdBy) VALUES (?, ?, ?, ?, ?)');
         channels.forEach(c => insertChannel.run(c.id, c.name, c.description, now, 'system'));
 
-        // Accessoires par défaut
         const accessories = [
             { id: 'charger', name: 'Chargeur', icon: 'power' }, 
             { id: 'mouse', name: 'Souris', icon: 'mouse' },
@@ -241,7 +237,6 @@ function initializeDefaultData() {
         const insertAccessory = db.prepare('INSERT OR IGNORE INTO accessories (id, name, icon, active, createdAt, createdBy) VALUES (?, ?, ?, 1, ?, ?)');
         accessories.forEach(a => insertAccessory.run(a.id, a.name, a.icon, now, 'system'));
 
-        // Paramètres de prêt par défaut
         const defaultSettings = { 
             maxLoanDays: 90, 
             maxExtensions: 3, 
@@ -255,9 +250,6 @@ function initializeDefaultData() {
     console.log('✅ Données par défaut insérées.');
 }
 
-/**
- * Ferme la connexion à la base de données.
- */
 function close() {
     if (db) {
         db.close();
@@ -266,14 +258,8 @@ function close() {
     }
 }
 
-/**
- * Exécute une requête qui ne retourne pas de résultat (INSERT, UPDATE, DELETE).
- * @param {string} sql La requête SQL.
- * @param {Array} params Les paramètres de la requête.
- * @returns {object} Le résultat de l'exécution.
- */
 function run(sql, params = []) {
-    connect(); // S'assure que la connexion est active
+    connect();
     try {
         return db.prepare(sql).run(params);
     } catch (error) {
@@ -282,12 +268,6 @@ function run(sql, params = []) {
     }
 }
 
-/**
- * Exécute une requête qui retourne une seule ligne.
- * @param {string} sql La requête SQL.
- * @param {Array} params Les paramètres de la requête.
- * @returns {object|undefined} La ligne de résultat ou undefined.
- */
 function get(sql, params = []) {
     connect();
     try {
@@ -298,12 +278,6 @@ function get(sql, params = []) {
     }
 }
 
-/**
- * Exécute une requête qui retourne plusieurs lignes.
- * @param {string} sql La requête SQL.
- * @param {Array} params Les paramètres de la requête.
- * @returns {Array<object>} Un tableau des lignes de résultat.
- */
 function all(sql, params = []) {
     connect();
     try {
@@ -314,12 +288,6 @@ function all(sql, params = []) {
     }
 }
 
-/**
- * Prépare une requête SQL pour une exécution ultérieure.
- * IMPORTANT: Cette méthode est nécessaire pour les transactions et requêtes paramétrées.
- * @param {string} sql La requête SQL à préparer.
- * @returns {Statement} Un objet Statement de better-sqlite3.
- */
 function prepare(sql) {
     connect();
     try {
@@ -330,12 +298,6 @@ function prepare(sql) {
     }
 }
 
-/**
- * Crée une fonction de transaction.
- * IMPORTANT: Cette méthode est nécessaire pour exécuter plusieurs requêtes de manière atomique.
- * @param {Function} fn La fonction contenant les opérations de la transaction.
- * @returns {Function} Une fonction qui exécute la transaction.
- */
 function transaction(fn) {
     connect();
     try {
@@ -346,10 +308,6 @@ function transaction(fn) {
     }
 }
 
-/**
- * Exécute une requête SQL brute (pour les cas particuliers).
- * @param {string} sql La ou les requêtes SQL à exécuter.
- */
 function exec(sql) {
     connect();
     try {
@@ -360,11 +318,6 @@ function exec(sql) {
     }
 }
 
-/**
- * Obtient une référence à la connexion db pour des opérations avancées.
- * ATTENTION: À utiliser avec précaution.
- * @returns {Database} L'instance de connexion better-sqlite3.
- */
 function getConnection() {
     connect();
     return db;
@@ -376,8 +329,8 @@ module.exports = {
     run,
     get,
     all,
-    prepare,      // ✅ AJOUT CRITIQUE
-    transaction,  // ✅ AJOUT CRITIQUE
-    exec,         // ✅ AJOUT POUR COMPATIBILITÉ
-    getConnection // ✅ AJOUT POUR CAS AVANCÉS
+    prepare,
+    transaction,
+    exec,
+    getConnection
 };

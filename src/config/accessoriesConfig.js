@@ -11,6 +11,7 @@ import CableIcon from '@mui/icons-material/Cable';
 import DockIcon from '@mui/icons-material/Dock';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import HeadsetIcon from '@mui/icons-material/Headset';
+import StorageIcon from '@mui/icons-material/Storage';
 import DevicesIcon from '@mui/icons-material/Devices';
 
 /**
@@ -26,6 +27,7 @@ export const ACCESSORY_ICONS = {
     dock: <DockIcon fontSize="small" />,
     keyboard: <KeyboardIcon fontSize="small" />,
     headset: <HeadsetIcon fontSize="small" />,
+    storage: <StorageIcon fontSize="small" />,
     devices: <DevicesIcon fontSize="small" />,
 };
 

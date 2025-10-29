@@ -37,7 +37,7 @@
     "Nom complet": "displayName",
     "Serveur": "server",
     "Mot de passe": "password",
-    "Mot de passe Office": "officePassword",
+    "Office": "officePassword",
     "Email": "email",
     "Service": "department"
   }

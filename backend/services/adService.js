@@ -141,8 +141,7 @@ async function getAdGroupMembers(groupName) {
 
 // === GESTION DES GROUPES ===
 
-async function addUserToGroup(args) {
-    const { username, groupName } = args;
+async function addUserToGroup(username, groupName) {
     const psScript = `
         try {
             Import-Module ActiveDirectory -ErrorAction Stop
@@ -164,8 +163,7 @@ async function addUserToGroup(args) {
     }
 }
 
-async function removeUserFromGroup(args) {
-    const { username, groupName } = args;
+async function removeUserFromGroup(username, groupName) {
     const psScript = `
         try {
             Import-Module ActiveDirectory -ErrorAction Stop
@@ -187,8 +185,7 @@ async function removeUserFromGroup(args) {
     }
 }
 
-async function isUserInGroup(args) {
-    const { username, groupName } = args;
+async function isUserInGroup(username, groupName) {
     const psScript = `
         try {
             Import-Module ActiveDirectory -ErrorAction Stop
@@ -373,7 +370,7 @@ module.exports = {
     getAdGroupMembers,
     addUserToGroup,
     removeUserFromGroup,
-    isUserInGroup, // **CORRECTION : Ajout de la fonction manquante à l'export**
+    isUserInGroup,
     createAdUser,
     disableAdUser,
     enableAdUser,

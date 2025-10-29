@@ -2,7 +2,10 @@
 
 import React, { useState, memo } from 'react';
 import { Box, Typography, IconButton, Tooltip } from '@mui/material';
-import { Visibility, VisibilityOff, ContentCopy as ContentCopyIcon } from '@mui/icons-material';
+// CORRECTION: Importation par défaut des icônes
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 /**
  * Composant pour afficher un mot de passe de manière sécurisée
@@ -28,7 +31,7 @@ const PasswordCompact = memo(({ password, label = null }) => {
     return (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {label && (
-                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5, minWidth: 40 }}>
                     {label}:
                 </Typography>
             )}

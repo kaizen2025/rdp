@@ -43,16 +43,16 @@ const LoanDialog = ({ open, onClose, computer, users, itStaff, onSave, isReserva
 
     useEffect(() => {
         const fetchAccessories = async () => {
-            try {
-                const accs = await apiService.getAccessories();
-                setAvailableAccessories(accs.filter(a => a.active));
-            } catch (error) {
-                console.error("Impossible de charger les accessoires", error);
+            if (open) {
+                try {
+                    const accs = await apiService.getAccessories();
+                    setAvailableAccessories(accs.filter(a => a.active));
+                } catch (error) {
+                    console.error("Impossible de charger les accessoires", error);
+                }
             }
         };
-        if (open) {
-            fetchAccessories();
-        }
+        fetchAccessories();
     }, [open]);
 
     const availableComputers = computers.filter(c => 

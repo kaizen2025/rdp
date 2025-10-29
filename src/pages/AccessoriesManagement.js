@@ -24,7 +24,7 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DevicesIcon from '@mui/icons-material/Devices';
 
 import { useApp } from '../contexts/AppContext';
-import apiService from '../services/apiService'; // Utiliser le service API
+import apiService from '../services/apiService';
 
 const AVAILABLE_ICONS = [
     { id: 'mouse', label: 'Souris', icon: <MouseIcon /> },
@@ -50,7 +50,6 @@ const AccessoriesManagement = () => {
     const loadAccessories = useCallback(async () => {
         setIsLoading(true);
         try {
-            // CORRECTION: Utilisation de apiService
             const data = await apiService.getAccessories();
             setAccessories(data || []);
         } catch (err) {
@@ -88,7 +87,6 @@ const AccessoriesManagement = () => {
         }
 
         try {
-            // CORRECTION: Utilisation de apiService
             await apiService.saveAccessory(formData);
             showNotification('success', `Accessoire ${editingAccessory ? 'modifié' : 'ajouté'} avec succès.`);
             handleCloseDialog();
@@ -102,7 +100,6 @@ const AccessoriesManagement = () => {
         if (!window.confirm(`Supprimer l'accessoire "${accessory.name}" ?`)) return;
 
         try {
-            // CORRECTION: Utilisation de apiService
             await apiService.deleteAccessory(accessory.id);
             showNotification('success', 'Accessoire supprimé.');
             await loadAccessories();

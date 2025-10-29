@@ -24,40 +24,20 @@ const InfoRow = ({ label, value, isPassword = false, forceCopy = false }) => {
 
   return (
     <Grid container item xs={12} alignItems="center" sx={{ mb: 1.5 }}>
-      {/* Label */}
       <Grid item xs={4}>
-        <Typography variant="subtitle2" color="text.secondary">
-          {label}
-        </Typography>
+        <Typography variant="subtitle2" color="text.secondary">{label}</Typography>
       </Grid>
-
-      {/* Value + Actions */}
       <Grid item xs={8}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="body1">
-            {isPassword && !showPassword ? '••••••••' : value || '-'}
-          </Typography>
-
+          <Typography variant="body1">{isPassword && !showPassword ? '••••••••' : value || '-'}</Typography>
           {(value || forceCopy) && (
             <Tooltip title="Copier">
-              <IconButton onClick={handleCopy} size="small" disabled={!value}>
-                <ContentCopyIcon fontSize="inherit" />
-              </IconButton>
+              <IconButton onClick={handleCopy} size="small" disabled={!value}><ContentCopyIcon fontSize="inherit" /></IconButton>
             </Tooltip>
           )}
-
           {isPassword && value && (
             <Tooltip title={showPassword ? 'Masquer' : 'Afficher'}>
-              <IconButton
-                onClick={() => setShowPassword(!showPassword)}
-                size="small"
-              >
-                {showPassword ? (
-                  <VisibilityOff fontSize="inherit" />
-                ) : (
-                  <Visibility fontSize="inherit" />
-                )}
-              </IconButton>
+              <IconButton onClick={() => setShowPassword(!showPassword)} size="small">{showPassword ? <VisibilityOff fontSize="inherit" /> : <Visibility fontSize="inherit" />}</IconButton>
             </Tooltip>
           )}
         </Box>
@@ -73,36 +53,20 @@ const UserInfoDialog = ({ open, onClose, user }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      {/* Header */}
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PersonIcon /> Fiche Utilisateur
-      </DialogTitle>
-
-      {/* Contenu */}
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><PersonIcon /> Fiche Utilisateur</DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={1}>
-          <InfoRow label="Nom d'utilisateur" value={user.user} />
+          {/* CORRECTION: Utilisation de user.username */}
+          <InfoRow label="Nom d'utilisateur" value={user.username} />
           <InfoRow label="Nom Complet" value={userInfo?.displayName} />
           <InfoRow label="Service" value={userInfo?.department} />
           <InfoRow label="Email" value={userInfo?.email} />
           <InfoRow label="Serveur RDS" value={user.server} />
-          <InfoRow
-            label="Mot de passe Windows"
-            value={userInfo?.password}
-            isPassword
-          />
-          <InfoRow
-            label="Mot de passe Office"
-            value={userInfo?.officePassword}
-            isPassword
-          />
+          <InfoRow label="Mot de passe Windows" value={userInfo?.password} isPassword />
+          <InfoRow label="Mot de passe Office" value={userInfo?.officePassword} isPassword />
         </Grid>
       </DialogContent>
-
-      {/* Footer */}
-      <DialogActions>
-        <Button onClick={onClose}>Fermer</Button>
-      </DialogActions>
+      <DialogActions><Button onClick={onClose}>Fermer</Button></DialogActions>
     </Dialog>
   );
 };

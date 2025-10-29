@@ -1,40 +1,37 @@
-// src/pages/UsersManagementPage.js - VERSION MODERNISÉE ET OPTIMISÉE
+// src/pages/UsersManagementPage.js - VERSION AVEC CORRECTION D'IMPORT
 
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useMemo, useCallback, memo, useEffect } from 'react'; // ✅ CORRECTION: Ajout de useEffect
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import {
     Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress,
     FormControl, InputLabel, Select, MenuItem, Chip, Snackbar, Alert,
-    Grid, LinearProgress, Menu, ListItemIcon, ListItemText
+    Grid, Menu, ListItemIcon, ListItemText
 } from '@mui/material';
 
 // Icons
 import {
     PersonAdd as PersonAddIcon, Refresh as RefreshIcon,
     Clear as ClearIcon,
-    Edit as EditIcon, Delete as DeleteIcon, Launch as LaunchIcon, Print as PrintIcon,
+    Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon,
     MoreVert as MoreVertIcon, VpnKey as VpnKeyIcon,
     Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon,
-    Dns as DnsIcon, LoginOutlined as LoginIcon
+    Dns as DnsIcon, Login as LoginIcon
 } from '@mui/icons-material';
 
 import { useApp } from '../contexts/AppContext';
-import { useCache } from '../contexts/CacheContext';
 import apiService from '../services/apiService';
+import useDataFetching from '../hooks/useDataFetching';
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
 import AdActionsDialog from '../components/AdActionsDialog';
 import PasswordCompact from '../components/PasswordCompact';
 import CopyableText from '../components/CopyableText';
 
-// Nouveaux composants modernes
 import PageHeader from '../components/common/PageHeader';
 import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
-
-// Debounce function is now built-in to SearchInput component
 
 const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     const isVpn = groupName === 'VPN';
@@ -57,7 +54,7 @@ const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     );
 });
 
-const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onConnectWithCredentials, onPrint, onOpenAdMenu, vpnMembers, internetMembers, onMembershipChange }) => {
+const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCredentials, onPrint, onOpenAdMenu, vpnMembers, internetMembers, onMembershipChange }) => {
     const { showNotification } = useApp();
     const [isUpdatingVpn, setIsUpdatingVpn] = useState(false);
     const [isUpdatingInternet, setIsUpdatingInternet] = useState(false);
@@ -83,18 +80,9 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onConne
                 <PasswordCompact password={user.officePassword} label="Office" />
             </Box>
             <Box sx={{ flex: '1 1 120px', minWidth: 100, display: 'flex', gap: 1 }}><AdGroupBadge groupName="VPN" isMember={vpnMembers.has(user.username)} onToggle={() => toggleGroup('VPN', vpnMembers.has(user.username), setIsUpdatingVpn)} isLoading={isUpdatingVpn} /><AdGroupBadge groupName="Sortants_responsables" isMember={internetMembers.has(user.username)} onToggle={() => toggleGroup('Sortants_responsables', internetMembers.has(user.username), setIsUpdatingInternet)} isLoading={isUpdatingInternet} /></Box>
-            <Box sx={{ flex: '0 0 auto', display: 'flex' }}>
+            <Box sx={{ flex: '0 0 auto', display: 'flex', justifyContent: 'flex-end', width: '180px' }}>
                 <Tooltip title="Connexion RDP automatique (avec identifiants)">
-                    <span>
-                        <IconButton size="small" onClick={() => onConnectWithCredentials(user)} disabled={!window.electronAPI} color="success">
-                            <LoginIcon />
-                        </IconButton>
-                    </span>
-                </Tooltip>
-                <Tooltip title="Connexion RDP standard">
-                    <span>
-                        <IconButton size="small" onClick={() => onConnect(user)} disabled={!window.electronAPI}><LaunchIcon /></IconButton>
-                    </span>
+                    <span><IconButton size="small" onClick={() => onConnectWithCredentials(user)} disabled={!window.electronAPI} color="success"><LoginIcon /></IconButton></span>
                 </Tooltip>
                 <Tooltip title="Éditer (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon /></IconButton></Tooltip>
                 <Tooltip title="Imprimer Fiche"><IconButton size="small" onClick={() => onPrint(user)}><PrintIcon /></IconButton></Tooltip>
@@ -107,10 +95,6 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnect, onConne
 
 const UsersManagementPage = () => {
     const { showNotification, events } = useApp();
-    const { fetchWithCache, invalidate } = useCache();
-    const [users, setUsers] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [serverFilter, setServerFilter] = useState('all');
     const [departmentFilter, setDepartmentFilter] = useState('all');
@@ -118,131 +102,60 @@ const UsersManagementPage = () => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
     const [userToPrint, setUserToPrint] = useState(null);
-    const [vpnMembers, setVpnMembers] = useState(new Set());
-    const [internetMembers, setInternetMembers] = useState(new Set());
     const [adDialogOpen, setAdDialogOpen] = useState(false);
     const [adMenuAnchor, setAdMenuAnchor] = useState(null);
     const [selectedUserForAd, setSelectedUserForAd] = useState(null);
     const [updateAvailable, setUpdateAvailable] = useState(false);
+
+    const { data: usersData, isLoading: isLoadingUsers, refresh: refreshUsers } = useDataFetching(apiService.getExcelUsers, { entityName: 'excel_users' });
+    const { data: vpnData, isLoading: isLoadingVpn, refresh: refreshVpn } = useDataFetching(() => apiService.getAdGroupMembers('VPN'), { entityName: 'ad_groups:VPN' });
+    const { data: internetData, isLoading: isLoadingInternet, refresh: refreshInternet } = useDataFetching(() => apiService.getAdGroupMembers('Sortants_responsables'), { entityName: 'ad_groups:Sortants_responsables' });
+
+    const isRefreshing = isLoadingUsers || isLoadingVpn || isLoadingInternet;
+
+    const users = useMemo(() => (usersData?.success && typeof usersData.users === 'object') ? Object.values(usersData.users).flat() : [], [usersData]);
+    const vpnMembers = useMemo(() => new Set((vpnData || []).map(m => m.SamAccountName)), [vpnData]);
+    const internetMembers = useMemo(() => new Set((internetData || []).map(m => m.SamAccountName)), [internetData]);
+
+    const handleRefresh = useCallback(async () => {
+        await Promise.all([refreshUsers(), refreshVpn(), refreshInternet()]);
+    }, [refreshUsers, refreshVpn, refreshInternet]);
+
+    useEffect(() => {
+        const onUsersUpdated = () => setUpdateAvailable(true);
+        const unsubscribe = events.on('data_updated:excel_users', onUsersUpdated);
+        return unsubscribe;
+    }, [events]);
 
     const { servers, departments } = useMemo(() => ({
         servers: [...new Set(users.map(u => u.server).filter(Boolean))].sort(),
         departments: [...new Set(users.map(u => u.department).filter(Boolean))].sort()
     }), [users]);
 
-    const loadGroupMembers = useCallback(async (force = false) => {
-        try {
-            const [vpnData, internetData] = await Promise.all([
-                fetchWithCache('adGroup:VPN', () => apiService.getAdGroupMembers('VPN'), { force }),
-                fetchWithCache('adGroup:Sortants_responsables', () => apiService.getAdGroupMembers('Sortants_responsables'), { force })
-            ]);
-            setVpnMembers(new Set((vpnData || []).map(m => m.SamAccountName)));
-            setInternetMembers(new Set((internetData || []).map(m => m.SamAccountName)));
-        } catch (error) { showNotification('error', `Erreur chargement groupes: ${error.message}`); }
-    }, [fetchWithCache, showNotification]);
-
-    const loadUsers = useCallback(async (force = false) => {
-        try {
-            const data = await fetchWithCache('excel_users', apiService.getExcelUsers, { force });
-            // Le backend retourne { success: true, users: { 'SRV-1': [...], 'SRV-2': [...] } }
-            // On doit aplatir cet objet en un seul tableau.
-            if (data?.success && typeof data.users === 'object' && data.users !== null) {
-                const allUsers = Object.values(data.users).flat();
-
-                // Log de debug pour les 2 premiers utilisateurs
-                console.log('📊 DEBUG Frontend - Utilisateurs chargés:', {
-                    total: allUsers.length,
-                    exemples: allUsers.slice(0, 2).map(u => ({
-                        username: u.username,
-                        displayName: u.displayName,
-                        hasPassword: !!u.password,
-                        hasOfficePassword: !!u.officePassword,
-                        passwordValue: u.password ? `${u.password.substring(0, 3)}***` : 'vide',
-                        officePasswordValue: u.officePassword ? `${u.officePassword.substring(0, 3)}***` : 'vide'
-                    }))
-                });
-
-                setUsers(allUsers);
-            } else {
-                setUsers([]);
-                if (data?.error) {
-                    showNotification('error', `Impossible de charger les utilisateurs : ${data.error}`);
-                }
-            }
-        } catch (error) {
-            showNotification('error', `Erreur critique lors du chargement des utilisateurs: ${error.message}`);
-            setUsers([]);
-        }
-    }, [fetchWithCache, showNotification]);
-
-    const handleRefresh = useCallback(async (force = true) => {
-        setIsRefreshing(true);
-        invalidate('excel_users');
-        invalidate('adGroup:VPN');
-        invalidate('adGroup:Sortants_responsables');
-        try { await Promise.all([loadUsers(force), loadGroupMembers(force)]); } 
-        finally { setIsRefreshing(false); }
-    }, [loadUsers, loadGroupMembers, invalidate]);
-
-    useEffect(() => {
-        setIsLoading(true);
-        handleRefresh(false).finally(() => setIsLoading(false));
-        const onUsersUpdated = () => setUpdateAvailable(true);
-        const unsubscribe = events.on('data_updated:excel_users', onUsersUpdated);
-        return unsubscribe;
-    }, [handleRefresh, events]);
-
     const filteredUsers = useMemo(() => {
         let result = users;
-
-        // Filtre par serveur
-        if (serverFilter !== 'all') {
-            result = result.filter(u => u.server === serverFilter);
-        }
-
-        // Filtre par service/département
-        if (departmentFilter !== 'all') {
-            result = result.filter(u => u.department === departmentFilter);
-        }
-
-        // Filtre par recherche textuelle (amélioration: recherche ciblée)
+        if (serverFilter !== 'all') result = result.filter(u => u.server === serverFilter);
+        if (departmentFilter !== 'all') result = result.filter(u => u.department === departmentFilter);
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            result = result.filter(u => {
-                const searchFields = [
-                    u.displayName,
-                    u.username,
-                    u.email,
-                    u.department,
-                    u.server
-                ];
-                return searchFields.some(field =>
-                    field && String(field).toLowerCase().includes(term)
-                );
-            });
+            result = result.filter(u => ['displayName', 'username', 'email', 'department', 'server'].some(field => u[field] && String(u[field]).toLowerCase().includes(term)));
         }
-
         return result;
     }, [users, searchTerm, serverFilter, departmentFilter]);
 
-    // Statistiques pour le PageHeader
-    const stats = useMemo(() => {
-        const usersWithVpn = users.filter(u => vpnMembers.has(u.username)).length;
-        const usersWithInternet = users.filter(u => internetMembers.has(u.username)).length;
-        return {
-            totalUsers: users.length,
-            usersWithVpn,
-            usersWithInternet,
-            totalServers: servers.length,
-            totalDepartments: departments.length
-        };
-    }, [users, vpnMembers, internetMembers, servers.length, departments.length]);
+    const stats = useMemo(() => ({
+        totalUsers: users.length,
+        usersWithVpn: users.filter(u => vpnMembers.has(u.username)).length,
+        usersWithInternet: users.filter(u => internetMembers.has(u.username)).length,
+        totalServers: servers.length,
+        totalDepartments: departments.length
+    }), [users, vpnMembers, internetMembers, servers.length, departments.length]);
     
     const handleSaveUser = async (userData) => {
         try {
             await apiService.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
             showNotification('success', 'Utilisateur sauvegardé.');
-            await handleRefresh(true);
+            await handleRefresh();
             setUserDialogOpen(false);
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     };
@@ -252,60 +165,32 @@ const UsersManagementPage = () => {
         try {
             await apiService.deleteUserFromExcel(user.username);
             showNotification('success', 'Utilisateur supprimé.');
-            await handleRefresh(true);
+            await handleRefresh();
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     }, [handleRefresh, showNotification]);
 
-    const handleConnectUser = useCallback((user) => {
-        if (window.electronAPI?.launchRdp) {
-            showNotification('info', `Lancement de la connexion RDP vers ${user.server}...`);
-            window.electronAPI.launchRdp({ server: user.server });
-        } else {
-            showNotification('warning', 'La connexion RDP directe est uniquement disponible dans l\'application de bureau.');
-        }
-    }, [showNotification]);
-
     const handleConnectUserWithCredentials = useCallback(async (user) => {
-        if (!window.electronAPI?.launchRdp) {
-            showNotification('warning', 'La connexion RDP directe est uniquement disponible dans l\'application de bureau.');
-            return;
-        }
-
-        if (!user.password) {
-            showNotification('error', 'Aucun mot de passe configuré pour cet utilisateur.');
-            return;
-        }
-
+        if (!window.electronAPI?.launchRdp) return showNotification('warning', 'La connexion RDP directe est uniquement disponible dans l\'application de bureau.');
+        if (!user.password) return showNotification('error', 'Aucun mot de passe configuré pour cet utilisateur.');
         try {
             showNotification('info', `Connexion automatique vers ${user.server} avec le compte ${user.username}...`);
-            const result = await window.electronAPI.launchRdp({
-                server: user.server,
-                username: user.username,
-                password: user.password
-            });
-
-            if (result.success) {
-                showNotification('success', `Connexion RDP lancée pour ${user.username}@${user.server}`);
-            } else {
-                showNotification('error', `Erreur: ${result.error}`);
-            }
-        } catch (error) {
-            showNotification('error', `Erreur lors du lancement: ${error.message}`);
-        }
+            const result = await window.electronAPI.launchRdp({ server: user.server, username: user.username, password: user.password });
+            if (!result.success) showNotification('error', `Erreur: ${result.error}`);
+        } catch (error) { showNotification('error', `Erreur lors du lancement: ${error.message}`); }
     }, [showNotification]);
 
     const Row = useCallback(({ index, style }) => (
         <UserRow
             user={filteredUsers[index]} style={style} isOdd={index % 2 === 1}
             onEdit={u => { setSelectedUser(u); setUserDialogOpen(true); }}
-            onDelete={handleDeleteUser} onConnect={handleConnectUser}
+            onDelete={handleDeleteUser}
             onConnectWithCredentials={handleConnectUserWithCredentials}
             onPrint={u => { setUserToPrint(u); setPrintPreviewOpen(true); }}
             onOpenAdMenu={(e, u) => { setSelectedUserForAd(u); setAdMenuAnchor(e.currentTarget); }}
             vpnMembers={vpnMembers} internetMembers={internetMembers}
-            onMembershipChange={() => handleRefresh(true)}
+            onMembershipChange={handleRefresh}
         />
-    ), [filteredUsers, vpnMembers, internetMembers, handleDeleteUser, handleConnectUser, handleConnectUserWithCredentials, handleRefresh]);
+    ), [filteredUsers, vpnMembers, internetMembers, handleDeleteUser, handleConnectUserWithCredentials, handleRefresh]);
     
     const clearFilters = () => {
         setSearchTerm('');
@@ -315,176 +200,62 @@ const UsersManagementPage = () => {
 
     return (
         <Box sx={{ p: 2 }}>
-            {isRefreshing && <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }} />}
-
-            {/* Header Moderne */}
             <PageHeader
                 title="Gestion des Utilisateurs"
-                subtitle={`Administration complète des comptes utilisateurs RDS et Active Directory`}
+                subtitle="Administration complète des comptes utilisateurs RDS et Active Directory"
                 icon={PersonIcon}
                 stats={[
-                    {
-                        label: 'Total utilisateurs',
-                        value: stats.totalUsers,
-                        icon: PersonIcon
-                    },
-                    {
-                        label: 'Accès VPN',
-                        value: stats.usersWithVpn,
-                        icon: VpnKeyIcon
-                    },
-                    {
-                        label: 'Accès Internet',
-                        value: stats.usersWithInternet,
-                        icon: LanguageIcon
-                    },
-                    {
-                        label: 'Serveurs',
-                        value: stats.totalServers,
-                        icon: DnsIcon
-                    }
+                    { label: 'Total utilisateurs', value: stats.totalUsers, icon: PersonIcon },
+                    { label: 'Accès VPN', value: stats.usersWithVpn, icon: VpnKeyIcon },
+                    { label: 'Accès Internet', value: stats.usersWithInternet, icon: LanguageIcon },
+                    { label: 'Serveurs', value: stats.totalServers, icon: DnsIcon }
                 ]}
                 actions={
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                        <Button
-                            variant="contained"
-                            startIcon={<PersonAddIcon />}
-                            onClick={() => {
-                                setSelectedUser(null);
-                                setUserDialogOpen(true);
-                            }}
-                            sx={{ borderRadius: 2 }}
-                        >
-                            Ajouter
-                        </Button>
+                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => { setSelectedUser(null); setUserDialogOpen(true); }} sx={{ borderRadius: 2 }}>Ajouter</Button>
                         <Tooltip title="Actualiser les données (Excel + AD)">
-                            <span>
-                                <IconButton
-                                    onClick={() => handleRefresh(true)}
-                                    disabled={isRefreshing}
-                                    color="primary"
-                                    sx={{
-                                        bgcolor: 'primary.lighter',
-                                        '&:hover': { bgcolor: 'primary.light' }
-                                    }}
-                                >
-                                    <RefreshIcon />
-                                </IconButton>
-                            </span>
+                            <span><IconButton onClick={handleRefresh} disabled={isRefreshing} color="primary"><>{isRefreshing ? <CircularProgress size={24} color="inherit" /> : <RefreshIcon />}</></IconButton></span>
                         </Tooltip>
                     </Box>
                 }
             />
 
-            {/* Filtres */}
             <Paper elevation={2} sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
                 <Grid container spacing={2} alignItems="flex-end">
-                    <Grid item xs={12} sm={4}>
-                        <SearchInput
-                            value={searchTerm}
-                            onChange={setSearchTerm}
-                            placeholder="Rechercher (Nom, Identifiant, Email...)"
-                            fullWidth
-                        />
-                    </Grid>
-                    <Grid item xs={6} sm={2}>
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Serveur</InputLabel>
-                            <Select
-                                value={serverFilter}
-                                label="Serveur"
-                                onChange={e => setServerFilter(e.target.value)}
-                                sx={{ borderRadius: 2 }}
-                            >
-                                <MenuItem value="all">Tous</MenuItem>
-                                {servers.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={6} sm={2}>
-                        <FormControl fullWidth size="small">
-                            <InputLabel>Service</InputLabel>
-                            <Select
-                                value={departmentFilter}
-                                label="Service"
-                                onChange={e => setDepartmentFilter(e.target.value)}
-                                sx={{ borderRadius: 2 }}
-                            >
-                                <MenuItem value="all">Tous</MenuItem>
-                                {departments.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}
-                            </Select>
-                        </FormControl>
-                    </Grid>
-                    <Grid item xs={6} sm={2}>
-                        <Button
-                            fullWidth
-                            size="small"
-                            startIcon={<ClearIcon />}
-                            onClick={clearFilters}
-                            sx={{ borderRadius: 2 }}
-                        >
-                            Réinitialiser
-                        </Button>
-                    </Grid>
-                    <Grid item xs={6} sm={2} sx={{ textAlign: 'right' }}>
-                        <Typography variant="body2" color="text.secondary" fontWeight={500}>
-                            {filteredUsers.length} / {users.length} affichés
-                        </Typography>
-                    </Grid>
+                    <Grid item xs={12} sm={4}><SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Rechercher (Nom, Identifiant, Email...)" fullWidth /></Grid>
+                    <Grid item xs={6} sm={2}><FormControl fullWidth size="small"><InputLabel>Serveur</InputLabel><Select value={serverFilter} label="Serveur" onChange={e => setServerFilter(e.target.value)} sx={{ borderRadius: 2 }}><MenuItem value="all">Tous</MenuItem>{servers.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl></Grid>
+                    <Grid item xs={6} sm={2}><FormControl fullWidth size="small"><InputLabel>Service</InputLabel><Select value={departmentFilter} label="Service" onChange={e => setDepartmentFilter(e.target.value)} sx={{ borderRadius: 2 }}><MenuItem value="all">Tous</MenuItem>{departments.map(d => <MenuItem key={d} value={d}>{d}</MenuItem>)}</Select></FormControl></Grid>
+                    <Grid item xs={6} sm={2}><Button fullWidth size="small" startIcon={<ClearIcon />} onClick={clearFilters} sx={{ borderRadius: 2 }}>Réinitialiser</Button></Grid>
+                    <Grid item xs={6} sm={2} sx={{ textAlign: 'right' }}><Typography variant="body2" color="text.secondary" fontWeight={500}>{filteredUsers.length} / {users.length} affichés</Typography></Grid>
                 </Grid>
             </Paper>
-            {/* Table des utilisateurs */}
-            {isLoading ? (
+
+            {isLoadingUsers && users.length === 0 ? (
                 <LoadingScreen type="list" items={8} />
             ) : !filteredUsers.length ? (
                 <Paper elevation={2} sx={{ p: 4, borderRadius: 2 }}>
                     <EmptyState
                         type={searchTerm || serverFilter !== 'all' || departmentFilter !== 'all' ? 'search' : 'empty'}
                         title={searchTerm || serverFilter !== 'all' || departmentFilter !== 'all' ? 'Aucun utilisateur trouvé' : 'Aucun utilisateur'}
-                        description={
-                            searchTerm || serverFilter !== 'all' || departmentFilter !== 'all'
-                                ? 'Essayez avec d\'autres critères de recherche'
-                                : 'Cliquez sur "Ajouter" pour créer votre premier utilisateur'
-                        }
+                        description={searchTerm || serverFilter !== 'all' || departmentFilter !== 'all' ? 'Essayez avec d\'autres critères de recherche' : 'Cliquez sur "Ajouter" pour créer votre premier utilisateur'}
                         actionLabel={searchTerm || serverFilter !== 'all' || departmentFilter !== 'all' ? 'Réinitialiser les filtres' : 'Ajouter un utilisateur'}
-                        onAction={
-                            searchTerm || serverFilter !== 'all' || departmentFilter !== 'all'
-                                ? clearFilters
-                                : () => {
-                                      setSelectedUser(null);
-                                      setUserDialogOpen(true);
-                                  }
-                        }
+                        onAction={searchTerm || serverFilter !== 'all' || departmentFilter !== 'all' ? clearFilters : () => { setSelectedUser(null); setUserDialogOpen(true); }}
                     />
                 </Paper>
             ) : (
                 <Paper elevation={2} sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2, minHeight: 500 }}>
-                    <Box sx={{
-                        px: 2,
-                        py: 1.5,
-                        backgroundColor: 'primary.main',
-                        color: 'white',
-                        display: 'flex',
-                        gap: 2,
-                        fontWeight: 600
-                    }}>
+                    <Box sx={{ px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', display: 'flex', gap: 2, fontWeight: 600 }}>
                         <Box sx={{ flex: '1 1 150px', minWidth: 120 }}>Utilisateur</Box>
                         <Box sx={{ flex: '0.8 1 100px', minWidth: 80 }}>Service</Box>
                         <Box sx={{ flex: '1.2 1 180px', minWidth: 150 }}>Email</Box>
                         <Box sx={{ flex: '1 1 160px', minWidth: 140 }}>Mots de passe</Box>
                         <Box sx={{ flex: '1 1 120px', minWidth: 100 }}>Groupes</Box>
-                        <Box sx={{ flex: '0 0 auto', width: '220px' }}>Actions</Box>
+                        <Box sx={{ flex: '0 0 auto', width: '180px' }}>Actions</Box>
                     </Box>
                     <Box sx={{ flex: 1, overflow: 'auto', minHeight: 400 }}>
                         <AutoSizer>
                             {({ height, width }) => (
-                                <List
-                                    height={height}
-                                    width={width}
-                                    itemCount={filteredUsers.length}
-                                    itemSize={80}
-                                    itemKey={i => filteredUsers[i].username}
-                                >
+                                <List height={height} width={width} itemCount={filteredUsers.length} itemSize={80} itemKey={i => filteredUsers[i].username}>
                                     {Row}
                                 </List>
                             )}
@@ -495,8 +266,8 @@ const UsersManagementPage = () => {
             {userDialogOpen && <UserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} user={selectedUser} onSave={handleSaveUser} servers={servers} />}
             {printPreviewOpen && <PrintPreviewDialog open={printPreviewOpen} onClose={() => setPrintPreviewOpen(false)} user={userToPrint} />}
             <Menu anchorEl={adMenuAnchor} open={Boolean(adMenuAnchor)} onClose={() => setAdMenuAnchor(null)}><MenuItem onClick={() => { setAdDialogOpen(true); setAdMenuAnchor(null); }}><ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon><ListItemText>Gérer le compte AD</ListItemText></MenuItem></Menu>
-            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => setAdDialogOpen(false)} user={selectedUserForAd} onActionComplete={() => handleRefresh(true)} />}
-            <Snackbar open={updateAvailable} autoHideDuration={10000} onClose={() => setUpdateAvailable(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}><Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { handleRefresh(true); setUpdateAvailable(false); }}>Recharger</Button>}>La liste des utilisateurs a été mise à jour.</Alert></Snackbar>
+            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => setAdDialogOpen(false)} user={selectedUserForAd} onActionComplete={handleRefresh} />}
+            <Snackbar open={updateAvailable} autoHideDuration={10000} onClose={() => setUpdateAvailable(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}><Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { handleRefresh(); setUpdateAvailable(false); }}>Recharger</Button>}>La liste des utilisateurs a été mise à jour.</Alert></Snackbar>
         </Box>
     );
 };

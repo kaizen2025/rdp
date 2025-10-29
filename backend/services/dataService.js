@@ -1,30 +1,20 @@
-// electron/services/dataService.js - VERSION COMPLÈTE REFACTORISÉE POUR SQLITE
+// backend/services/dataService.js - VERSION AVEC STATUT DE PRÊT DYNAMIQUE
 
 const db = require('./databaseService');
 const { generateId } = require('./utils');
 
-// Fonctions utilitaires pour gérer les champs JSON stockés en TEXT dans SQLite
 const parseJSON = (field, defaultValue = null) => {
     if (field === null || field === undefined) return defaultValue;
-    try {
-        return JSON.parse(field) || defaultValue;
-    } catch {
-        return defaultValue;
-    }
+    try { return JSON.parse(field) || defaultValue; } catch { return defaultValue; }
 };
 const stringifyJSON = (field) => {
-    try {
-        return JSON.stringify(field);
-    } catch {
-        return null;
-    }
+    try { return JSON.stringify(field); } catch { return null; }
 };
 
 // === ORDINATEURS ===
 
 async function getComputers() {
     const rows = db.all('SELECT * FROM computers ORDER BY name ASC');
-    // Convertir les champs JSON texte en objets pour le frontend
     return rows.map(c => ({
         ...c,
         specifications: parseJSON(c.specifications, {}),
@@ -56,7 +46,6 @@ async function saveComputer(computerData, technician) {
 
 async function deleteComputer(computerId, technician) {
     try {
-        // La contrainte "ON DELETE CASCADE" dans le schéma s'occupera de supprimer les prêts associés.
         db.run('DELETE FROM computers WHERE id = ?', [computerId]);
         return { success: true };
     } catch (error) {
@@ -87,10 +76,33 @@ async function addComputerMaintenance(computerId, maintenanceData, technician) {
 
 // === PRÊTS ===
 
+/**
+ * Calcule le statut dynamique d'un prêt.
+ * @param {object} loan - L'objet prêt.
+ * @returns {string} Le statut calculé ('active', 'overdue', 'critical', etc.).
+ */
+function getDynamicLoanStatus(loan) {
+    if (loan.status === 'returned' || loan.status === 'cancelled') {
+        return loan.status;
+    }
+    if (loan.status === 'reserved' && new Date(loan.loanDate) > new Date()) {
+        return 'reserved';
+    }
+
+    const now = new Date();
+    const expectedReturn = new Date(loan.expectedReturnDate);
+    const diffDays = Math.ceil((now - expectedReturn) / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 7) return 'critical';
+    if (diffDays > 0) return 'overdue';
+    return 'active';
+}
+
 async function getLoans() {
     const rows = db.all(`SELECT * FROM loans`);
     return rows.map(l => ({
         ...l,
+        status: getDynamicLoanStatus(l), // ✅ Calcul dynamique du statut
         accessories: parseJSON(l.accessories, []),
         history: parseJSON(l.history, []),
         returnData: parseJSON(l.returnData, null),
@@ -216,7 +228,16 @@ async function getLoanHistory(filters = {}) {
 async function getLoanStatistics() {
     try {
         const computers = db.get(`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available, SUM(CASE WHEN status = 'loaned' THEN 1 ELSE 0 END) as loaned, SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) as maintenance FROM computers`);
-        const loans = db.get(`SELECT COUNT(*) as total, SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active, SUM(CASE WHEN status = 'reserved' THEN 1 ELSE 0 END) as reserved, SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue, SUM(CASE WHEN status = 'critical' THEN 1 ELSE 0 END) as critical FROM loans WHERE status NOT IN ('returned', 'cancelled')`);
+        
+        // ✅ Calcul dynamique des prêts en retard pour les statistiques
+        const allActiveLoans = await getLoans();
+        const activeLoansStats = allActiveLoans.reduce((acc, loan) => {
+            if (loan.status !== 'returned' && loan.status !== 'cancelled') {
+                acc[loan.status] = (acc[loan.status] || 0) + 1;
+            }
+            return acc;
+        }, {});
+
         const history = db.get(`SELECT COUNT(*) as totalLoans FROM loan_history WHERE eventType = 'created'`);
         
         const topUsers = db.all(`SELECT userDisplayName, COUNT(*) as count FROM loan_history WHERE eventType = 'created' GROUP BY userDisplayName ORDER BY count DESC LIMIT 5`);
@@ -224,7 +245,12 @@ async function getLoanStatistics() {
 
         return {
             computers: { total: computers.total || 0, available: computers.available || 0, loaned: computers.loaned || 0, maintenance: computers.maintenance || 0 },
-            loans: { active: loans.active || 0, reserved: loans.reserved || 0, overdue: loans.overdue || 0, critical: loans.critical || 0 },
+            loans: { 
+                active: activeLoansStats.active || 0, 
+                reserved: activeLoansStats.reserved || 0, 
+                overdue: activeLoansStats.overdue || 0, 
+                critical: activeLoansStats.critical || 0 
+            },
             history: { totalLoans: history.totalLoans || 0 },
             topUsers: topUsers.map(u => ({ user: u.userDisplayName, count: u.count })),
             topComputers,
