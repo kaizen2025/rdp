@@ -225,12 +225,14 @@ async function startServer() {
         // ========================================
         startBackgroundTasks();
 
-        const buildPath = path.join(__dirname, '..', 'build');
-        app.use(express.static(buildPath));
-        app.get('*', (req, res) => {
-          res.sendFile(path.join(buildPath, 'index.html'));
-        });
-        console.log(`✅ Service des fichiers statiques configuré pour servir depuis : ${buildPath}`);
+        if (process.env.NODE_ENV === 'production') {
+          const buildPath = path.join(__dirname, '..', 'build');
+          app.use(express.static(buildPath));
+          app.get('*', (req, res) => {
+            res.sendFile(path.join(buildPath, 'index.html'));
+          });
+          console.log(`✅ Service des fichiers statiques configuré pour servir depuis : ${buildPath}`);
+        }
 
         server.listen(API_PORT, () => {
             console.log(`\n📡 Serveur API et Web démarré sur http://localhost:${API_PORT}`);
