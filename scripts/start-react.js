@@ -95,7 +95,7 @@ function createEnvFile(reactPort, serverPort, wsPort) {
 PORT=${reactPort}
 
 # URL du serveur backend
-REACT_APP_API_URL=http://localhost:${serverPort}
+REACT_APP_API_URL=http://localhost:${serverPort}/api
 
 # URL du WebSocket
 REACT_APP_WS_URL=ws://localhost:${wsPort}
