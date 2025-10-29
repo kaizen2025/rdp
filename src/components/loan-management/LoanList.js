@@ -30,12 +30,18 @@ const LoanHistoryDialog = lazy(() => import('../LoanHistoryDialog'));
 const STATUS_CONFIG = {
     active: { label: 'Actif', color: 'success' },
     reserved: { label: 'Réservé', color: 'info' },
-    overdue: { label: 'En retard', color: 'warning' },
-    critical: { label: 'Critique', color: 'error' },
+    overdue: { label: 'En Retard', color: 'warning', tooltip: 'Retard de 1-3 jours' },
+    critical: { label: 'Critique', color: 'error', tooltip: 'Retard de plus de 3 jours' },
 };
 
 const LoanRow = memo(({ loan, style, onReturn, onExtend, onCancel, onHistory }) => {
     const statusConfig = STATUS_CONFIG[loan.status] || { label: loan.status, color: 'default' };
+
+    // Calculer les jours de retard
+    const daysOverdue = loan.status === 'overdue' || loan.status === 'critical'
+        ? Math.floor((new Date() - new Date(loan.expectedReturnDate)) / (1000 * 60 * 60 * 24))
+        : 0;
+
     return (
         <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, borderBottom: '1px solid #eee', '&:hover': { backgroundColor: 'action.hover' } }}>
             <Box sx={{ flex: 2 }}><Typography variant="body2" fontWeight="bold">{loan.computerName}</Typography></Box>
@@ -43,7 +49,15 @@ const LoanRow = memo(({ loan, style, onReturn, onExtend, onCancel, onHistory }) 
             <Box sx={{ flex: 1.5 }}><Typography variant="body2">{loan.itStaff}</Typography></Box>
             <Box sx={{ flex: 1.5 }}><Typography variant="body2">{new Date(loan.loanDate).toLocaleDateString()}</Typography></Box>
             <Box sx={{ flex: 1.5 }}><Typography variant="body2">{new Date(loan.expectedReturnDate).toLocaleDateString()}</Typography></Box>
-            <Box sx={{ flex: 1.5 }}><Chip label={statusConfig.label} color={statusConfig.color} size="small" /></Box>
+            <Box sx={{ flex: 1.5 }}>
+                <Tooltip title={statusConfig.tooltip || statusConfig.label} arrow>
+                    <Chip
+                        label={daysOverdue > 0 ? `${statusConfig.label} (${daysOverdue}j)` : statusConfig.label}
+                        color={statusConfig.color}
+                        size="small"
+                    />
+                </Tooltip>
+            </Box>
             <Box sx={{ flex: 1 }}><Typography variant="body2" textAlign="center">{loan.extensionCount || 0}</Typography></Box>
             <Box sx={{ flex: 1.5, textAlign: 'right' }}>
                 <Tooltip title="Retourner"><IconButton size="small" onClick={() => onReturn(loan)}><AssignmentReturnIcon color="success" /></IconButton></Tooltip>
@@ -156,12 +170,12 @@ const LoanList = () => {
     }
 
     return (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 200px)' }}>
+        <Box sx={{ p: { xs: 1, sm: 2 }, display: 'flex', flexDirection: 'column', height: { xs: 'calc(100vh - 150px)', md: 'calc(100vh - 200px)' } }}>
             {isRefreshing && <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0 }} />}
-            <Paper sx={{ p: 2, mb: 2 }}>
+            <Paper sx={{ p: { xs: 1.5, sm: 2 }, mb: 2 }}>
                 <Grid container spacing={2} alignItems="center">
                     <Grid item xs={12} sm={4}>
-                        <TextField fullWidth size="small" placeholder="Rechercher un ordinateur, un utilisateur..." InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} onChange={e => setSearchTerm(e.target.value)} />
+                        <TextField fullWidth size="small" placeholder="Rechercher..." InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} onChange={e => setSearchTerm(e.target.value)} />
                     </Grid>
                     <Grid item xs={12} sm={3}>
                         <FormControl fullWidth size="small">
@@ -173,8 +187,8 @@ const LoanList = () => {
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} sm={5} sx={{ textAlign: 'right' }}>
-                        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ open: 'new', data: null })}>Nouveau Prêt</Button>
+                    <Grid item xs={12} sm={5} sx={{ textAlign: { xs: 'center', sm: 'right' } }}>
+                        <Button variant="contained" startIcon={<AddIcon />} size={window.innerWidth < 600 ? 'small' : 'medium'} onClick={() => setDialog({ open: 'new', data: null })}>Nouveau Prêt</Button>
                         <Tooltip title="Actualiser"><IconButton onClick={() => loadData(true)} disabled={isRefreshing}><RefreshIcon /></IconButton></Tooltip>
                     </Grid>
                 </Grid>

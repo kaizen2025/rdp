@@ -41,26 +41,27 @@ const ServerStatusWidget = memo(({ serversToPing }) => {
     const { data: statuses, isLoading } = useDataFetching(fetchStatuses, { refreshInterval: 60000 });
 
     return (
-        <Paper elevation={2} sx={{ p: 2.5, height: '100%', borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}>
-                <DnsIcon sx={{ mr: 1.5, color: 'primary.main' }} />
+        <Paper elevation={2} sx={{ p: 1.5, height: '100%', borderRadius: 2 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}>
+                <DnsIcon sx={{ mr: 1, fontSize: 18, color: 'primary.main' }} />
                 Statut Serveurs RDS
             </Typography>
             {isLoading && !statuses ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                    <CircularProgress size={24} />
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                    <CircularProgress size={20} />
                 </Box>
             ) : (
-                <List dense>
+                <List dense disablePadding sx={{ maxHeight: 180, overflowY: 'auto' }}>
                     {(statuses || []).map(({ server, online, message }) => (
-                        <ListItem key={server} disablePadding sx={{ mb: 0.5 }}>
+                        <ListItem key={server} disablePadding sx={{ mb: 0.3 }}>
                             <Tooltip title={message || 'Vérification...'} placement="right" arrow>
                                 <Chip
                                     icon={online ? <CheckCircleIcon /> : <CancelIcon />}
                                     label={server}
                                     color={online ? 'success' : 'error'}
                                     variant={online ? 'filled' : 'outlined'}
-                                    sx={{ width: '100%', justifyContent: 'flex-start', fontWeight: 500 }}
+                                    size="small"
+                                    sx={{ width: '100%', justifyContent: 'flex-start', fontWeight: 500, fontSize: '0.75rem', height: 28 }}
                                 />
                             </Tooltip>
                         </ListItem>
@@ -86,29 +87,29 @@ const ConnectedTechniciansWidget = memo(() => {
     };
 
     return (
-        <Paper elevation={2} sx={{ p: 2.5, height: '100%', borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}>
-                <PeopleIcon sx={{ mr: 1.5, color: 'secondary.main' }} />
+        <Paper elevation={2} sx={{ p: 1.5, height: '100%', borderRadius: 2 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}>
+                <PeopleIcon sx={{ mr: 1, fontSize: 18, color: 'secondary.main' }} />
                 Techniciens ({technicians?.length || 0})
             </Typography>
             {isLoading && !technicians ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-                    <CircularProgress size={24} />
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+                    <CircularProgress size={20} />
                 </Box>
             ) : (
-                <List dense>
+                <List dense disablePadding sx={{ maxHeight: 180, overflowY: 'auto' }}>
                     {technicians?.length > 0 ? technicians.map(tech => (
-                        <ListItem key={tech.id} disableGutters sx={{ py: 0.5 }}>
-                            <ListItemAvatar sx={{ minWidth: 44 }}>
-                                <Avatar sx={{ width: 36, height: 36, fontSize: '0.875rem', bgcolor: 'secondary.main' }}>{tech.avatar}</Avatar>
+                        <ListItem key={tech.id} disableGutters sx={{ py: 0.3 }}>
+                            <ListItemAvatar sx={{ minWidth: 32 }}>
+                                <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem', bgcolor: 'secondary.main' }}>{tech.avatar}</Avatar>
                             </ListItemAvatar>
                             <ListItemText
-                                primary={<Typography variant="body2" fontWeight={500}>{tech.name}</Typography>}
-                                secondary={<Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}><AccessTimeIcon sx={{ fontSize: 14 }} /><Typography variant="caption">{calculateConnectionTime(tech.loginTime)}</Typography></Box>}
+                                primary={<Typography variant="caption" fontWeight={500}>{tech.name}</Typography>}
+                                secondary={<Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}><AccessTimeIcon sx={{ fontSize: 12 }} /><Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{calculateConnectionTime(tech.loginTime)}</Typography></Box>}
                             />
                         </ListItem>
                     )) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>Aucun technicien connecté</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ py: 2, textAlign: 'center', display: 'block' }}>Aucun technicien connecté</Typography>
                     )}
                 </List>
             )}
@@ -118,20 +119,23 @@ const ConnectedTechniciansWidget = memo(() => {
 
 const RecentActivityWidget = memo(() => {
     const { data: activities, isLoading } = useDataFetching(() => apiService.getLoanHistory({ limit: 5 }), { entityName: 'loan_history' });
-    const getActivityIcon = (e) => ({ created: <AssignmentIcon color="success" />, returned: <CheckCircleIcon color="primary" />, extended: <TrendingUpIcon color="info" />, cancelled: <CancelIcon color="error" /> }[e] || <HistoryIcon />);
-    const getActivityText = (act) => `${({ created: 'Prêt', returned: 'Retour', extended: 'Prolongation', cancelled: 'Annulation' }[act.eventType] || 'Action')}: ${act.computerName || 'N/A'} pour ${act.userDisplayName || 'N/A'}`;
+    const getActivityIcon = (e) => ({ created: <AssignmentIcon color="success" fontSize="small" />, returned: <CheckCircleIcon color="primary" fontSize="small" />, extended: <TrendingUpIcon color="info" fontSize="small" />, cancelled: <CancelIcon color="error" fontSize="small" /> }[e] || <HistoryIcon fontSize="small" />);
+    const getActivityText = (act) => `${({ created: 'Prêt', returned: 'Retour', extended: 'Prolong.', cancelled: 'Annul.' }[act.eventType] || 'Action')}: ${act.computerName || 'N/A'}`;
 
     return (
-        <Paper elevation={2} sx={{ p: 2.5, height: '100%', borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}><HistoryIcon sx={{ mr: 1.5, color: 'info.main' }} />Activité Récente</Typography>
-            {isLoading && !activities ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} /></Box> : (
-                <List dense>
+        <Paper elevation={2} sx={{ p: 1.5, height: '100%', borderRadius: 2 }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}><HistoryIcon sx={{ mr: 1, fontSize: 18, color: 'info.main' }} />Activité Récente</Typography>
+            {isLoading && !activities ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}><CircularProgress size={20} /></Box> : (
+                <List dense disablePadding sx={{ maxHeight: 180, overflowY: 'auto' }}>
                     {activities?.length > 0 ? activities.map(act => (
-                        <ListItem key={act.id} disableGutters sx={{ py: 0.5 }}>
-                            <ListItemAvatar sx={{ minWidth: 40 }}>{getActivityIcon(act.eventType)}</ListItemAvatar>
-                            <ListItemText primary={<Typography variant="body2">{getActivityText(act)}</Typography>} secondary={<Typography variant="caption">Par {act.by || 'Système'}</Typography>} />
+                        <ListItem key={act.id} disableGutters sx={{ py: 0.3 }}>
+                            <ListItemAvatar sx={{ minWidth: 32 }}>{getActivityIcon(act.eventType)}</ListItemAvatar>
+                            <ListItemText
+                                primary={<Typography variant="caption">{getActivityText(act)}</Typography>}
+                                secondary={<Typography variant="caption" sx={{ fontSize: '0.65rem' }}>Par {act.by || 'Syst.'}</Typography>}
+                            />
                         </ListItem>
-                    )) : <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>Aucune activité récente</Typography>}
+                    )) : <Typography variant="caption" color="text.secondary" sx={{ py: 2, textAlign: 'center', display: 'block' }}>Aucune activité récente</Typography>}
                 </List>
             )}
         </Paper>
@@ -157,14 +161,14 @@ const DashboardPage = () => {
     }
 
     return (
-        <Box sx={{ p: 2 }}>
+        <Box sx={{ p: { xs: 1, sm: 2 }, maxHeight: '100vh', overflow: 'auto' }}>
             <PageHeader
                 title="Tableau de Bord"
                 subtitle="Vue d'ensemble de l'activité RDS et gestion des prêts"
                 icon={DashboardIcon}
             />
 
-            <Grid container spacing={3}>
+            <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                 <Grid item xs={12} sm={6} md={3}>
                     <StatCard title="Matériel Total" value={stats?.computers?.total ?? 0} subtitle={`${stats?.computers?.available ?? 0} disponibles`} icon={LaptopChromebookIcon} color="primary" loading={isLoadingStats} onClick={() => navigate('/loans', { state: { initialTab: 1 }})} tooltip="Stock total d'ordinateurs et disponibilité" />
                 </Grid>
@@ -189,27 +193,27 @@ const DashboardPage = () => {
                 </Grid>
 
                 <Grid item xs={12} md={6}>
-                    <Paper elevation={2} sx={{ p: 2.5, height: '100%', borderRadius: 2 }}>
-                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}><WarningIcon sx={{ mr: 1.5, color: 'warning.main' }} />Prêts en Retard ({overdueLoans.length})</Typography>
-                        {isLoadingLoans ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24}/></Box> : (
-                            <List dense>
+                    <Paper elevation={2} sx={{ p: 1.5, height: '100%', maxHeight: 240, borderRadius: 2, display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}><WarningIcon sx={{ mr: 1, fontSize: 18, color: 'warning.main' }} />Prêts en Retard ({overdueLoans.length})</Typography>
+                        {isLoadingLoans ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}><CircularProgress size={20}/></Box> : (
+                            <List dense disablePadding sx={{ flex: 1, overflowY: 'auto' }}>
                                 {overdueLoans.slice(0,5).map(l => (
-                                    <ListItem key={l.id} disableGutters sx={{ py: 0.5 }}><ListItemText primary={<Typography variant="body2" fontWeight={500}>{l.computerName}</Typography>} secondary={`${l.userDisplayName} • Retour: ${new Date(l.expectedReturnDate).toLocaleDateString('fr-FR')}`} /></ListItem>
+                                    <ListItem key={l.id} disableGutters sx={{ py: 0.3 }}><ListItemText primary={<Typography variant="caption" fontWeight={500}>{l.computerName}</Typography>} secondary={<Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{l.userDisplayName} • {new Date(l.expectedReturnDate).toLocaleDateString('fr-FR')}</Typography>} /></ListItem>
                                 ))}
-                                {overdueLoans.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>Aucun prêt en retard</Typography>}
+                                {overdueLoans.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ py: 2, textAlign: 'center', display: 'block' }}>Aucun prêt en retard</Typography>}
                             </List>
                         )}
                     </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                    <Paper elevation={2} sx={{ p: 2.5, height: '100%', borderRadius: 2 }}>
-                        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}><AssignmentIcon sx={{ mr: 1.5, color: 'info.main' }} />Prêts Actifs ({activeLoans.length})</Typography>
-                        {isLoadingLoans ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24}/></Box> : (
-                            <List dense>
+                    <Paper elevation={2} sx={{ p: 1.5, height: '100%', maxHeight: 240, borderRadius: 2, display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', fontWeight: 600, mb: 1 }}><AssignmentIcon sx={{ mr: 1, fontSize: 18, color: 'info.main' }} />Prêts Actifs ({activeLoans.length})</Typography>
+                        {isLoadingLoans ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}><CircularProgress size={20}/></Box> : (
+                            <List dense disablePadding sx={{ flex: 1, overflowY: 'auto' }}>
                                 {activeLoans.slice(0,5).map(l => (
-                                    <ListItem key={l.id} disableGutters sx={{ py: 0.5 }}><ListItemText primary={<Typography variant="body2" fontWeight={500}>{l.computerName}</Typography>} secondary={`${l.userDisplayName} • Retour: ${new Date(l.expectedReturnDate).toLocaleDateString('fr-FR')}`} /></ListItem>
+                                    <ListItem key={l.id} disableGutters sx={{ py: 0.3 }}><ListItemText primary={<Typography variant="caption" fontWeight={500}>{l.computerName}</Typography>} secondary={<Typography variant="caption" sx={{ fontSize: '0.65rem' }}>{l.userDisplayName} • {new Date(l.expectedReturnDate).toLocaleDateString('fr-FR')}</Typography>} /></ListItem>
                                 ))}
-                                {activeLoans.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>Aucun prêt actif</Typography>}
+                                {activeLoans.length === 0 && <Typography variant="caption" color="text.secondary" sx={{ py: 2, textAlign: 'center', display: 'block' }}>Aucun prêt actif</Typography>}
                             </List>
                         )}
                     </Paper>
