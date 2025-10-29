@@ -12,11 +12,10 @@ const PasswordCompact = memo(({ password, label = null }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [copied, setCopied] = useState(false);
 
-    if (!password) {
-        return <Typography variant="caption" color="text.secondary">-</Typography>;
-    }
+    const hasPassword = password && password.trim().length > 0;
 
     const handleCopy = async () => {
+        if (!hasPassword) return;
         try {
             await navigator.clipboard.writeText(password);
             setCopied(true);
@@ -38,32 +37,39 @@ const PasswordCompact = memo(({ password, label = null }) => {
                 sx={{
                     fontFamily: 'monospace',
                     minWidth: '80px',
-                    fontSize: '0.875rem'
+                    fontSize: '0.875rem',
+                    color: hasPassword ? 'text.primary' : 'text.disabled'
                 }}
             >
-                {isVisible ? password : '••••••••'}
+                {hasPassword ? (isVisible ? password : '••••••••') : 'Non défini'}
             </Typography>
-            <Tooltip title={isVisible ? 'Masquer' : 'Afficher'}>
-                <IconButton
-                    size="small"
-                    onClick={() => setIsVisible(!isVisible)}
-                    sx={{ p: 0.5 }}
-                >
-                    {isVisible ?
-                        <VisibilityOff sx={{ fontSize: '16px' }} /> :
-                        <Visibility sx={{ fontSize: '16px' }} />
-                    }
-                </IconButton>
+            <Tooltip title={hasPassword ? (isVisible ? 'Masquer' : 'Afficher') : 'Aucun mot de passe'}>
+                <span>
+                    <IconButton
+                        size="small"
+                        onClick={() => setIsVisible(!isVisible)}
+                        sx={{ p: 0.5 }}
+                        disabled={!hasPassword}
+                    >
+                        {isVisible ?
+                            <VisibilityOff sx={{ fontSize: '16px' }} /> :
+                            <Visibility sx={{ fontSize: '16px' }} />
+                        }
+                    </IconButton>
+                </span>
             </Tooltip>
-            <Tooltip title={copied ? 'Copié!' : 'Copier'}>
-                <IconButton
-                    size="small"
-                    onClick={handleCopy}
-                    sx={{ p: 0.5 }}
-                    color={copied ? 'success' : 'default'}
-                >
-                    <ContentCopyIcon sx={{ fontSize: '14px' }} />
-                </IconButton>
+            <Tooltip title={hasPassword ? (copied ? 'Copié!' : 'Copier') : 'Aucun mot de passe à copier'}>
+                <span>
+                    <IconButton
+                        size="small"
+                        onClick={handleCopy}
+                        sx={{ p: 0.5 }}
+                        color={copied ? 'success' : 'default'}
+                        disabled={!hasPassword}
+                    >
+                        <ContentCopyIcon sx={{ fontSize: '14px' }} />
+                    </IconButton>
+                </span>
             </Tooltip>
         </Box>
     );
