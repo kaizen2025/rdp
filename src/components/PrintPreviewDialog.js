@@ -34,12 +34,12 @@ import jsPDF from 'jspdf';
 // --- Composant interne pour le design de la fiche ---
 // Ce composant recrée le design de votre "jolie" fiche.
 const UserSheet = React.forwardRef(({ user }, ref) => {
-    if (!user) return null;
-
     const [showWindowsPassword, setShowWindowsPassword] = useState(false);
     const [showOfficePassword, setShowOfficePassword] = useState(false);
     const [copiedWindows, setCopiedWindows] = useState(false);
     const [copiedOffice, setCopiedOffice] = useState(false);
+
+    if (!user) return null;
 
     const handleCopyPassword = async (password, setCopied) => {
         try {
