@@ -15,7 +15,7 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import PersonIcon from '@mui/icons-material/Person';
 
-const InfoRow = ({ label, value, isPassword = false }) => {
+const InfoRow = ({ label, value, isPassword = false, forceCopy = false }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleCopy = () => {
@@ -38,15 +38,15 @@ const InfoRow = ({ label, value, isPassword = false }) => {
             {isPassword && !showPassword ? '••••••••' : value || '-'}
           </Typography>
 
-          {value && (
+          {(value || forceCopy) && (
             <Tooltip title="Copier">
-              <IconButton onClick={handleCopy} size="small">
+              <IconButton onClick={handleCopy} size="small" disabled={!value}>
                 <ContentCopyIcon fontSize="inherit" />
               </IconButton>
             </Tooltip>
           )}
 
-          {isPassword && (
+          {isPassword && value && (
             <Tooltip title={showPassword ? 'Masquer' : 'Afficher'}>
               <IconButton
                 onClick={() => setShowPassword(!showPassword)}
@@ -95,6 +95,7 @@ const UserInfoDialog = ({ open, onClose, user }) => {
             label="Mot de passe Office"
             value={userInfo?.officePassword}
             isPassword
+            forceCopy
           />
         </Grid>
       </DialogContent>

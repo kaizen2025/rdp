@@ -110,6 +110,7 @@ class ApiService {
 
     // UTILISATEURS EXCEL
     getExcelUsers = async () => this.request('/excel/users')
+    refreshExcelUsers = async () => this.request('/excel/users/refresh', { method: 'POST' })
     saveUserToExcel = async (userData) => this.request('/excel/users', { method: 'POST', body: JSON.stringify(userData) })
     deleteUserFromExcel = async (username) => this.request(`/excel/users/${encodeURIComponent(username)}`, { method: 'DELETE' })
 

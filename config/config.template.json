@@ -3,9 +3,12 @@
   "excelFilePath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\Data_utilisateur_partage.xlsx",
   "excelColumnMapping": {
     "Identifiant": "username",
-    "Nom Complet": "displayName",
-    "Serveur": "server",
-    "Mot de passe": "password"
+    "Mot de passe": "password",
+    "Office": "officePassword",
+    "Nom complet": "displayName",
+    "Service": "service",
+    "Email": "email",
+    "Serveur": "server"
   },
   "rds_servers": [
     "SRV-RDS-1",

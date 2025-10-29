@@ -90,7 +90,7 @@ const SessionsPage = () => {
         try {
             const [sessionsData, usersData] = await Promise.all([
                 apiService.getRdsSessions(),
-                apiService.getExcelUsers()
+                isRefresh ? apiService.refreshExcelUsers() : apiService.getExcelUsers()
             ]);
 
             setSessions(Array.isArray(sessionsData) ? sessionsData : []);
