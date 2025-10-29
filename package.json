@@ -29,6 +29,9 @@
     "appId": "com.anecoop.rds-viewer",
     "productName": "RDS Viewer Anecoop",
     "asar": true,
+    "asarUnpack": [
+      "server/**"
+    ],
     "files": [
       "build/**/*",
       "electron/**/*",

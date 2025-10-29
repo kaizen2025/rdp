@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Dialog from '@mui/material/Dialog';
+import StyledDialog from './StyledDialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
@@ -83,6 +83,8 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
         assetTag: ''
     });
 
+    const [errors, setErrors] = useState({});
+
     useEffect(() => {
         if (computer) {
             setFormData({
@@ -165,8 +167,6 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
         }));
     };
 
-    const [errors, setErrors] = useState({});
-
     const validateField = (name, value) => {
         let error = '';
         switch (name) {
@@ -176,11 +176,20 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
             case 'serialNumber':
                 if (!value) error = 'Le numéro de série est obligatoire';
                 break;
+            case 'warranty.purchasePrice':
+                if (value && parseFloat(value) < 0) error = 'Le prix ne peut pas être négatif';
+                break;
             default:
                 break;
         }
         return error;
-    }
+    };
+
+    const handleBlur = (e) => {
+        const { name, value } = e.target;
+        const error = validateField(name, value);
+        setErrors(prev => ({ ...prev, [name]: error }));
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -222,7 +231,7 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
     };
 
     return (
-        <Dialog
+        <StyledDialog
             open={open}
             onClose={onClose}
             maxWidth="lg"
@@ -251,6 +260,7 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
                             label="Nom de l'ordinateur (ex: PC-ANECOOP-01)" 
                             value={formData.name} 
                             onChange={handleChange} 
+                            onBlur={handleBlur}
                             fullWidth 
                             required 
                             error={!!errors.name}
@@ -291,6 +301,7 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
                             label="Numéro de série" 
                             value={formData.serialNumber} 
                             onChange={handleChange} 
+                            onBlur={handleBlur}
                             fullWidth 
                             required 
                             error={!!errors.serialNumber}
@@ -475,8 +486,11 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
                             label="Prix d'achat (€)" 
                             value={formData.warranty.purchasePrice} 
                             onChange={handleChange} 
+                            onBlur={handleBlur}
                             fullWidth 
                             type="number"
+                            error={!!errors['warranty.purchasePrice']}
+                            helperText={errors['warranty.purchasePrice']}
                         />
                     </Grid>
 
@@ -505,7 +519,7 @@ const ComputerDialog = ({ open, onClose, computer, onSave }) => {
                     {computer ? 'Sauvegarder' : 'Ajouter'}
                 </Button>
             </DialogActions>
-        </Dialog>
+        </StyledDialog>
     );
 };
 
