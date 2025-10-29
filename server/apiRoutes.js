@@ -180,6 +180,12 @@ module.exports = (getBroadcast) => {
 
     // --- UTILISATEURS EXCEL ---
     router.get('/excel/users', asyncHandler(async (req, res) => res.json(await excelService.readExcelFileAsync())));
+    router.post('/excel/users/refresh', asyncHandler(async (req, res) => {
+        excelService.invalidateCache();
+        const result = await excelService.readExcelFileAsync();
+        getBroadcast()({ type: 'data_updated', payload: { entity: 'excel_users' } });
+        res.json(result);
+    }));
     router.post('/excel/users', asyncHandler(async (req, res) => {
         const result = await excelService.saveUserToExcel(req.body);
         getBroadcast()({ type: 'data_updated', payload: { entity: 'excel_users' } });
