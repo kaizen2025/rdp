@@ -6,7 +6,7 @@ import AutoSizer from 'react-virtualized-auto-sizer';
 import {
     Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress,
     FormControl, InputLabel, Select, MenuItem, Chip, Snackbar, Alert,
-    Grid, Menu, ListItemIcon, ListItemText
+    Grid
 } from '@mui/material';
 
 // Icons
@@ -14,7 +14,7 @@ import {
     PersonAdd as PersonAddIcon, Refresh as RefreshIcon,
     Clear as ClearIcon,
     Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon,
-    MoreVert as MoreVertIcon, VpnKey as VpnKeyIcon,
+    VpnKey as VpnKeyIcon,
     Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon,
     Dns as DnsIcon, Login as LoginIcon
 } from '@mui/icons-material';
@@ -54,7 +54,7 @@ const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     );
 });
 
-const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCredentials, onPrint, onOpenAdMenu, vpnMembers, internetMembers, onMembershipChange }) => {
+const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCredentials, onPrint, onOpenAdDialog, vpnMembers, internetMembers, onMembershipChange }) => {
     const { showNotification } = useApp();
     const [isUpdatingVpn, setIsUpdatingVpn] = useState(false);
     const [isUpdatingInternet, setIsUpdatingInternet] = useState(false);
@@ -66,7 +66,7 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCrede
             await action(user.username, group);
             showNotification('success', `${user.username} ${isMember ? 'retiré de' : 'ajouté à'} ${group}`);
             onMembershipChange();
-        } catch (error) { showNotification('error', `Erreur: ${error.message}`); } 
+        } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
         finally { setLoading(false); }
     }, [user.username, onMembershipChange, showNotification]);
 
@@ -86,7 +86,7 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCrede
                 </Tooltip>
                 <Tooltip title="Éditer (Excel)"><IconButton size="small" onClick={() => onEdit(user)}><EditIcon /></IconButton></Tooltip>
                 <Tooltip title="Imprimer Fiche"><IconButton size="small" onClick={() => onPrint(user)}><PrintIcon /></IconButton></Tooltip>
-                <Tooltip title="Actions AD"><IconButton size="small" onClick={(e) => onOpenAdMenu(e, user)}><MoreVertIcon /></IconButton></Tooltip>
+                <Tooltip title="Actions Active Directory"><IconButton size="small" onClick={() => onOpenAdDialog(user)} color="primary"><SettingsIcon /></IconButton></Tooltip>
                 <Tooltip title="Supprimer (Excel)"><IconButton size="small" onClick={() => onDelete(user)}><DeleteIcon color="error" /></IconButton></Tooltip>
             </Box>
         </Box>
@@ -103,7 +103,6 @@ const UsersManagementPage = () => {
     const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
     const [userToPrint, setUserToPrint] = useState(null);
     const [adDialogOpen, setAdDialogOpen] = useState(false);
-    const [adMenuAnchor, setAdMenuAnchor] = useState(null);
     const [selectedUserForAd, setSelectedUserForAd] = useState(null);
     const [updateAvailable, setUpdateAvailable] = useState(false);
 
@@ -186,7 +185,7 @@ const UsersManagementPage = () => {
             onDelete={handleDeleteUser}
             onConnectWithCredentials={handleConnectUserWithCredentials}
             onPrint={u => { setUserToPrint(u); setPrintPreviewOpen(true); }}
-            onOpenAdMenu={(e, u) => { setSelectedUserForAd(u); setAdMenuAnchor(e.currentTarget); }}
+            onOpenAdDialog={u => { setSelectedUserForAd(u); setAdDialogOpen(true); }}
             vpnMembers={vpnMembers} internetMembers={internetMembers}
             onMembershipChange={handleRefresh}
         />
@@ -265,8 +264,7 @@ const UsersManagementPage = () => {
             )}
             {userDialogOpen && <UserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} user={selectedUser} onSave={handleSaveUser} servers={servers} />}
             {printPreviewOpen && <PrintPreviewDialog open={printPreviewOpen} onClose={() => setPrintPreviewOpen(false)} user={userToPrint} />}
-            <Menu anchorEl={adMenuAnchor} open={Boolean(adMenuAnchor)} onClose={() => setAdMenuAnchor(null)}><MenuItem onClick={() => { setAdDialogOpen(true); setAdMenuAnchor(null); }}><ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon><ListItemText>Gérer le compte AD</ListItemText></MenuItem></Menu>
-            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => setAdDialogOpen(false)} user={selectedUserForAd} onActionComplete={handleRefresh} />}
+            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => { setAdDialogOpen(false); setSelectedUserForAd(null); }} user={selectedUserForAd} onActionComplete={handleRefresh} />}
             <Snackbar open={updateAvailable} autoHideDuration={10000} onClose={() => setUpdateAvailable(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}><Alert severity="info" action={<Button color="inherit" size="small" onClick={() => { handleRefresh(); setUpdateAvailable(false); }}>Recharger</Button>}>La liste des utilisateurs a été mise à jour.</Alert></Snackbar>
         </Box>
     );
