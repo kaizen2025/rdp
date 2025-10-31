@@ -1,126 +1,56 @@
-// src/components/loan-management/LoanList.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
+// src/components/loan-management/LoanList.js - NOUVEAU FICHIER COMPLET
 
-import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy, memo } from 'react';
-import { FixedSizeList as List } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
-    Box, Paper, TextField, InputAdornment, FormControl, InputLabel, Select, MenuItem,
-    Typography, IconButton, Tooltip, Chip, Button, CircularProgress, Alert, LinearProgress, Grid
+    Box, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Chip, Tooltip, IconButton, Grid, FormControl, InputLabel, Select, MenuItem, Button
 } from '@mui/material';
+import {
+    Edit as EditIcon, AssignmentReturn as AssignmentReturnIcon, Update as UpdateIcon,
+    Cancel as CancelIcon, History as HistoryIcon, FilterListOff as FilterListOffIcon
+} from '@mui/icons-material';
 
-// Icons
-import SearchIcon from '@mui/icons-material/Search';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import AddIcon from '@mui/icons-material/Add';
-import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
-import UpdateIcon from '@mui/icons-material/Update';
-import CancelIcon from '@mui/icons-material/Cancel';
-import HistoryIcon from '@mui/icons-material/History';
-
-// Import des services et contextes
 import { useApp } from '../../contexts/AppContext';
+import { useCache } from '../../contexts/CacheContext';
 import apiService from '../../services/apiService';
 
-// Lazy loading des dialogues
-const LoanDialog = lazy(() => import('../LoanDialog'));
-const ReturnLoanDialog = lazy(() => import('../ReturnLoanDialog'));
-const ExtendLoanDialog = lazy(() => import('../ExtendLoanDialog'));
-const LoanHistoryDialog = lazy(() => import('../LoanHistoryDialog'));
+import SearchInput from '../common/SearchInput';
+import EmptyState from '../common/EmptyState';
+import LoadingScreen from '../common/LoadingScreen';
+import LoanDialog from '../LoanDialog';
+import ReturnLoanDialog from '../ReturnLoanDialog';
+import ExtendLoanDialog from '../ExtendLoanDialog';
+import LoanHistoryDialog from '../LoanHistoryDialog';
 
 const STATUS_CONFIG = {
     active: { label: 'Actif', color: 'success' },
     reserved: { label: 'Réservé', color: 'info' },
-    overdue: { label: 'En Retard', color: 'warning', tooltip: 'Retard de 1-3 jours' },
-    critical: { label: 'Critique', color: 'error', tooltip: 'Retard de plus de 3 jours' },
+    overdue: { label: 'En retard', color: 'warning' },
+    critical: { label: 'Critique', color: 'error' },
+    returned: { label: 'Retourné', color: 'default' },
+    cancelled: { label: 'Annulé', color: 'default' },
 };
 
-const LoanRow = memo(({ loan, style, onReturn, onExtend, onCancel, onHistory }) => {
-    const statusConfig = STATUS_CONFIG[loan.status] || { label: loan.status, color: 'default' };
+const LoanList = ({ preFilter }) => {
+    const { showNotification } = useApp();
+    const { cache, isLoading, invalidate } = useCache();
 
-    // Calculer les jours de retard
-    const daysOverdue = loan.status === 'overdue' || loan.status === 'critical'
-        ? Math.floor((new Date() - new Date(loan.expectedReturnDate)) / (1000 * 60 * 60 * 24))
-        : 0;
-
-    return (
-        <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, borderBottom: '1px solid #eee', '&:hover': { backgroundColor: 'action.hover' } }}>
-            <Box sx={{ flex: 2 }}><Typography variant="body2" fontWeight="bold">{loan.computerName}</Typography></Box>
-            <Box sx={{ flex: 2 }}><Typography variant="body2">{loan.userDisplayName}</Typography></Box>
-            <Box sx={{ flex: 1.5 }}><Typography variant="body2">{loan.itStaff}</Typography></Box>
-            <Box sx={{ flex: 1.5 }}><Typography variant="body2">{new Date(loan.loanDate).toLocaleDateString()}</Typography></Box>
-            <Box sx={{ flex: 1.5 }}><Typography variant="body2">{new Date(loan.expectedReturnDate).toLocaleDateString()}</Typography></Box>
-            <Box sx={{ flex: 1.5 }}>
-                <Tooltip title={statusConfig.tooltip || statusConfig.label} arrow>
-                    <Chip
-                        label={daysOverdue > 0 ? `${statusConfig.label} (${daysOverdue}j)` : statusConfig.label}
-                        color={statusConfig.color}
-                        size="small"
-                    />
-                </Tooltip>
-            </Box>
-            <Box sx={{ flex: 1 }}><Typography variant="body2" textAlign="center">{loan.extensionCount || 0}</Typography></Box>
-            <Box sx={{ flex: 1.5, textAlign: 'right' }}>
-                <Tooltip title="Retourner"><IconButton size="small" onClick={() => onReturn(loan)}><AssignmentReturnIcon color="success" /></IconButton></Tooltip>
-                <Tooltip title="Prolonger"><IconButton size="small" onClick={() => onExtend(loan)}><UpdateIcon color="info" /></IconButton></Tooltip>
-                <Tooltip title="Historique"><IconButton size="small" onClick={() => onHistory(loan)}><HistoryIcon /></IconButton></Tooltip>
-                <Tooltip title="Annuler"><IconButton size="small" onClick={() => onCancel(loan)}><CancelIcon color="error" /></IconButton></Tooltip>
-            </Box>
-        </Box>
-    );
-});
-
-const LoanList = () => {
-    const { showNotification, events } = useApp();
-    const [loans, setLoans] = useState([]);
-    const [computers, setComputers] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [itStaff, setItStaff] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const [error, setError] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('active');
-    const [dialog, setDialog] = useState({ open: null, data: null });
+    const [statusFilter, setStatusFilter] = useState(preFilter || 'active_ongoing');
+    const [dialog, setDialog] = useState({ type: null, data: null });
 
-    const loadData = useCallback(async (isRefresh = false) => {
-        if (isRefresh) setIsRefreshing(true); else setIsLoading(true);
-        setError('');
-        try {
-            const [loansData, computersData, usersData, configData] = await Promise.all([
-                apiService.getLoans(),
-                apiService.getComputers(),
-                apiService.getExcelUsers(),
-                apiService.getConfig(),
-            ]);
-            setLoans(loansData || []);
-            setComputers(computersData || []);
-            setUsers(usersData.success ? Object.values(usersData.users).flat() : []);
-            setItStaff(configData.it_staff || []);
-        } catch (err) {
-            console.error("Erreur de chargement des données de prêts:", err);
-            setError(`Erreur de chargement: ${err.message}`);
-        } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadData();
-        const unsubscribe = events.on('data_updated', (payload) => {
-            if (['loans', 'computers', 'excel_users'].includes(payload.entity)) {
-                loadData(true);
-            }
-        });
-        return unsubscribe;
-    }, [loadData, events]);
+    const { loans, computers, users, itStaff } = useMemo(() => ({
+        loans: cache.loans || [],
+        computers: cache.computers || [],
+        users: Object.values(cache.excel_users || {}).flat(),
+        itStaff: cache.config?.it_staff || [],
+    }), [cache]);
 
     const filteredLoans = useMemo(() => {
-        const activeLoans = loans.filter(l => !['returned', 'cancelled'].includes(l.status));
-        let result = activeLoans;
+        let result = [...loans];
         if (statusFilter !== 'all') {
-            if (statusFilter === 'active') {
-                result = result.filter(l => ['active', 'overdue', 'critical'].includes(l.status));
+            if (statusFilter === 'active_ongoing') {
+                result = result.filter(l => ['active', 'overdue', 'critical', 'reserved'].includes(l.status));
             } else {
                 result = result.filter(l => l.status === statusFilter);
             }
@@ -136,92 +66,130 @@ const LoanList = () => {
         return result;
     }, [loans, statusFilter, searchTerm]);
 
-    const handleApiCall = useCallback(async (apiFunc, ...args) => {
+    const handleSaveLoan = async (loanData) => {
+        const isEdit = !!loanData.id;
         try {
-            await apiFunc(...args);
-            showNotification('success', 'Opération réussie.');
-            setDialog({ open: null, data: null });
-        } catch (err) {
-            showNotification('error', `Erreur: ${err.message}`);
+            if (isEdit) {
+                await apiService.updateLoan(loanData.id, loanData);
+                showNotification('success', 'Prêt modifié avec succès.');
+            } else {
+                await apiService.createLoan(loanData);
+                showNotification('success', 'Prêt créé avec succès.');
+            }
+            await Promise.all([invalidate('loans'), invalidate('computers')]);
+        } catch (error) {
+            showNotification('error', `Erreur: ${error.message}`);
+        } finally {
+            setDialog({ type: null, data: null });
         }
-    }, [showNotification]);
+    };
 
-    const Row = ({ index, style }) => (
-        <LoanRow
-            loan={filteredLoans[index]}
-            style={style}
-            onReturn={(data) => setDialog({ open: 'return', data })}
-            onExtend={(data) => setDialog({ open: 'extend', data })}
-            onCancel={(data) => {
-                if (window.confirm(`Voulez-vous vraiment annuler le prêt pour ${data.computerName} ?`)) {
-                    handleApiCall(apiService.cancelLoan, data.id, 'Annulé par le technicien.');
-                }
-            }}
-            onHistory={(data) => setDialog({ open: 'history', data })}
-        />
-    );
+    const handleReturnLoan = async (loan, notes, accessoryInfo) => {
+        try {
+            await apiService.returnLoan(loan.id, notes, accessoryInfo);
+            showNotification('success', 'Prêt retourné.');
+            await Promise.all([invalidate('loans'), invalidate('computers')]);
+        } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
+        finally { setDialog({ type: null, data: null }); }
+    };
+
+    const handleExtendLoan = async (loanId, newDate, reason) => {
+        try {
+            await apiService.extendLoan(loanId, newDate, reason);
+            showNotification('success', 'Prêt prolongé.');
+            await invalidate('loans');
+        } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
+        finally { setDialog({ type: null, data: null }); }
+    };
+
+    const handleCancelLoan = async (loan) => {
+        const reason = prompt('Raison de l\'annulation:');
+        if (reason) {
+            try {
+                await apiService.cancelLoan(loan.id, reason);
+                showNotification('success', 'Prêt annulé.');
+                await Promise.all([invalidate('loans'), invalidate('computers')]);
+            } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
+        }
+    };
+
+    const formatDate = (dateStr) => new Date(dateStr).toLocaleDateString('fr-FR');
 
     if (isLoading) {
-        return <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>;
-    }
-
-    if (error) {
-        return <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>;
+        return <LoadingScreen type="table" />;
     }
 
     return (
-        <Box sx={{ p: { xs: 1, sm: 2 }, display: 'flex', flexDirection: 'column', height: { xs: 'calc(100vh - 150px)', md: 'calc(100vh - 200px)' } }}>
-            {isRefreshing && <LinearProgress sx={{ position: 'absolute', top: 0, left: 0, right: 0 }} />}
-            <Paper sx={{ p: { xs: 1.5, sm: 2 }, mb: 2 }}>
+        <Box sx={{ p: 2 }}>
+            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={4}>
-                        <TextField fullWidth size="small" placeholder="Rechercher..." InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} onChange={e => setSearchTerm(e.target.value)} />
+                    <Grid item xs={12} sm={6}>
+                        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Rechercher un prêt..." />
                     </Grid>
-                    <Grid item xs={12} sm={3}>
+                    <Grid item xs={12} sm={4}>
                         <FormControl fullWidth size="small">
-                            <InputLabel>Statut Prêt</InputLabel>
-                            <Select value={statusFilter} label="Statut Prêt" onChange={e => setStatusFilter(e.target.value)}>
-                                <MenuItem value="all">Tous (en cours)</MenuItem>
-                                <MenuItem value="active">Actifs (inclus retards)</MenuItem>
-                                <MenuItem value="reserved">Réservés</MenuItem>
+                            <InputLabel>Statut</InputLabel>
+                            <Select value={statusFilter} label="Statut" onChange={(e) => setStatusFilter(e.target.value)}>
+                                <MenuItem value="active_ongoing">En cours</MenuItem>
+                                <MenuItem value="all">Tous</MenuItem>
+                                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                                    <MenuItem key={key} value={key}>{config.label}</MenuItem>
+                                ))}
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} sm={5} sx={{ textAlign: { xs: 'center', sm: 'right' } }}>
-                        <Button variant="contained" startIcon={<AddIcon />} size={window.innerWidth < 600 ? 'small' : 'medium'} onClick={() => setDialog({ open: 'new', data: null })}>Nouveau Prêt</Button>
-                        <Tooltip title="Actualiser"><IconButton onClick={() => loadData(true)} disabled={isRefreshing}><RefreshIcon /></IconButton></Tooltip>
+                    <Grid item xs={12} sm={2}>
+                        <Button fullWidth startIcon={<FilterListOffIcon />} onClick={() => { setSearchTerm(''); setStatusFilter('active_ongoing'); }}>
+                            Effacer
+                        </Button>
                     </Grid>
                 </Grid>
             </Paper>
 
-            <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <Box sx={{ px: 2, py: 1.5, backgroundColor: 'grey.200', display: 'flex', fontWeight: 'bold' }}>
-                    <Box sx={{ flex: 2 }}>Ordinateur</Box>
-                    <Box sx={{ flex: 2 }}>Utilisateur</Box>
-                    <Box sx={{ flex: 1.5 }}>Responsable IT</Box>
-                    <Box sx={{ flex: 1.5 }}>Date Prêt</Box>
-                    <Box sx={{ flex: 1.5 }}>Retour Prévu</Box>
-                    <Box sx={{ flex: 1.5 }}>Statut</Box>
-                    <Box sx={{ flex: 1, textAlign: 'center' }}>Prolong.</Box>
-                    <Box sx={{ flex: 1.5, textAlign: 'right' }}>Actions</Box>
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                    <AutoSizer>
-                        {({ height, width }) => (
-                            <List height={height} width={width} itemCount={filteredLoans.length} itemSize={50} itemKey={i => filteredLoans[i].id}>
-                                {Row}
-                            </List>
-                        )}
-                    </AutoSizer>
-                </Box>
-            </Paper>
+            {filteredLoans.length === 0 ? (
+                <EmptyState type="search" title="Aucun prêt trouvé" description="Aucun prêt ne correspond à vos critères de recherche." />
+            ) : (
+                <TableContainer component={Paper} elevation={2}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell>Statut</TableCell>
+                                <TableCell>Matériel</TableCell>
+                                <TableCell>Utilisateur</TableCell>
+                                <TableCell>Date de prêt</TableCell>
+                                <TableCell>Retour prévu</TableCell>
+                                <TableCell>Actions</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {filteredLoans.map(loan => {
+                                const config = STATUS_CONFIG[loan.status] || {};
+                                return (
+                                    <TableRow key={loan.id} hover>
+                                        <TableCell><Chip label={config.label} color={config.color} size="small" /></TableCell>
+                                        <TableCell>{loan.computerName}</TableCell>
+                                        <TableCell>{loan.userDisplayName || loan.userName}</TableCell>
+                                        <TableCell>{formatDate(loan.loanDate)}</TableCell>
+                                        <TableCell>{formatDate(loan.expectedReturnDate)}</TableCell>
+                                        <TableCell>
+                                            <Tooltip title="Retourner"><IconButton size="small" color="success" onClick={() => setDialog({ type: 'return', data: loan })}><AssignmentReturnIcon /></IconButton></Tooltip>
+                                            <Tooltip title="Modifier"><IconButton size="small" color="primary" onClick={() => setDialog({ type: 'edit', data: loan })}><EditIcon /></IconButton></Tooltip>
+                                            <Tooltip title="Prolonger"><IconButton size="small" color="info" onClick={() => setDialog({ type: 'extend', data: loan })}><UpdateIcon /></IconButton></Tooltip>
+                                            <Tooltip title="Historique"><IconButton size="small" onClick={() => setDialog({ type: 'history', data: loan })}><HistoryIcon /></IconButton></Tooltip>
+                                            <Tooltip title="Annuler"><IconButton size="small" color="error" onClick={() => handleCancelLoan(loan)}><CancelIcon /></IconButton></Tooltip>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+            )}
 
-            <Suspense fallback={<CircularProgress />}>
-                {dialog.open === 'new' && <LoanDialog open={true} onClose={() => setDialog({ open: null, data: null })} onSave={(data) => handleApiCall(apiService.createLoan, data)} computers={computers} users={users} itStaff={itStaff} loans={loans} />}
-                {dialog.open === 'return' && <ReturnLoanDialog open={true} onClose={() => setDialog({ open: null, data: null })} loan={dialog.data} onReturn={(loan, notes, accessoryInfo) => handleApiCall(apiService.returnLoan, loan.id, notes, accessoryInfo)} />}
-                {dialog.open === 'extend' && <ExtendLoanDialog open={true} onClose={() => setDialog({ open: null, data: null })} loan={dialog.data} onExtend={(id, date, reason) => handleApiCall(apiService.extendLoan, id, date, reason)} />}
-                {dialog.open === 'history' && <LoanHistoryDialog open={true} onClose={() => setDialog({ open: null, data: null })} loan={dialog.data} />}
-            </Suspense>
+            {dialog.type === 'edit' && <LoanDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} onSave={handleSaveLoan} computers={computers} users={users} itStaff={itStaff} />}
+            {dialog.type === 'return' && <ReturnLoanDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} onReturn={handleReturnLoan} />}
+            {dialog.type === 'extend' && <ExtendLoanDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} onExtend={handleExtendLoan} />}
+            {dialog.type === 'history' && <LoanHistoryDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} />}
         </Box>
     );
 };

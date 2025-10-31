@@ -1,84 +1,118 @@
-// src/components/CreateAdUserDialog.js - Dialog pour créer un utilisateur AD
+// src/components/CreateAdUserDialog.js - VERSION FINALE AVEC MENTION SAGE
 
-import React, { useState } from 'react';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import Button from '@mui/material/Button';
-import TextField from '@mui/material/TextField';
-import Grid from '@mui/material/Grid';
-import Alert from '@mui/material/Alert';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
-import Typography from '@mui/material/Typography';
-import Box from '@mui/material/Box';
-import CircularProgress from '@mui/material/CircularProgress';
-import Divider from '@mui/material/Divider';
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Grid,
+    Alert, FormControlLabel, Checkbox, Typography, Box, CircularProgress,
+    Divider, FormControl, InputLabel, Select, MenuItem, Autocomplete, IconButton,
+    InputAdornment, Tooltip, Chip
+} from '@mui/material';
+import Slide from '@mui/material/Slide';
 
 // Icons
-import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import LockIcon from '@mui/icons-material/Lock';
-import InfoIcon from '@mui/icons-material/Info';
-import Slide from '@mui/material/Slide';
+import {
+    PersonAdd as PersonAddIcon, Lock as LockIcon, ContentCopy as ContentCopyIcon,
+    Refresh as RefreshIcon, Visibility, VisibilityOff, Info as InfoIcon,
+    CheckCircle as CheckCircleIcon
+} from '@mui/icons-material';
+
+import apiService from '../services/apiService';
+import { useApp } from '../contexts/AppContext';
+import { useCache } from '../contexts/CacheContext';
 
 const Transition = React.forwardRef(function Transition(props, ref) {
     return <Slide direction="up" ref={ref} {...props} />;
 });
 
-const CreateAdUserDialog = ({ open, onClose, onSuccess, defaultOU = "OU=Users,DC=anecoopfr,DC=local" }) => {
-    const [formData, setFormData] = useState({
-        username: '',
-        firstName: '',
-        lastName: '',
-        displayName: '',
-        email: '',
-        password: '',
-        confirmPassword: '',
-        ouPath: defaultOU,
-        changePasswordAtLogon: true,
-        description: '',
-        addToExcel: true, // Option pour ajouter aussi dans le fichier Excel local
-    });
+// Sous-composant pour un champ de mot de passe amélioré (avec icônes)
+const PasswordInput = ({ label, value, name, onChange, onGenerate, helperText, error }) => {
+    const [isVisible, setIsVisible] = useState(false);
+    const [copied, setCopied] = useState(false);
 
+    const handleCopy = async () => {
+        if (!value) return;
+        await navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <TextField
+            label={label}
+            name={name}
+            type={isVisible ? 'text' : 'password'}
+            fullWidth
+            value={value}
+            onChange={onChange}
+            error={!!error}
+            helperText={error || helperText}
+            InputProps={{
+                endAdornment: (
+                    <InputAdornment position="end">
+                        {onGenerate && <Tooltip title="Générer"><IconButton onClick={onGenerate}><RefreshIcon /></IconButton></Tooltip>}
+                        <Tooltip title="Copier"><IconButton onClick={handleCopy} disabled={!value}>{copied ? <CheckCircleIcon color="success" /> : <ContentCopyIcon />}</IconButton></Tooltip>
+                        <Tooltip title={isVisible ? "Masquer" : "Afficher"}><IconButton onClick={() => setIsVisible(!isVisible)}>{isVisible ? <VisibilityOff /> : <Visibility />}</IconButton></Tooltip>
+                    </InputAdornment>
+                )
+            }}
+        />
+    );
+};
+
+const CreateAdUserDialog = ({ open, onClose, onSuccess, servers, defaultOU = "OU=Users,DC=anecoopfr,DC=local" }) => {
+    const { showNotification } = useApp();
+    const { cache } = useCache();
+    const allUsers = useMemo(() => Object.values(cache.excel_users || {}).flat(), [cache.excel_users]);
+    const departments = useMemo(() => [...new Set(allUsers.map(u => u.department).filter(Boolean))].sort(), [allUsers]);
+
+    const initialFormData = {
+        username: '', firstName: '', lastName: '', displayName: '', email: '',
+        password: '', confirmPassword: '', officePassword: '',
+        server: servers?.[0] || '', department: '', ouPath: defaultOU,
+        changePasswordAtLogon: false, description: '', addToExcel: true, copyFromUser: null,
+    };
+
+    const [formData, setFormData] = useState(initialFormData);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
-
     const [fieldErrors, setFieldErrors] = useState({});
+
+    useEffect(() => {
+        if (open) {
+            setFormData(initialFormData);
+            setError(''); setSuccess(''); setFieldErrors({});
+        }
+    }, [open, servers, defaultOU]);
+
+    useEffect(() => {
+        const { firstName, lastName } = formData;
+        if (firstName && lastName) {
+            const firstInitial = firstName.charAt(0).toLowerCase();
+            const username = (firstInitial + lastName.toLowerCase()).replace(/[^a-z0-9.-_]/g, '');
+            setFormData(prev => ({ ...prev, username }));
+        }
+    }, [formData.firstName, formData.lastName]);
+
+    const handleCopyFromUser = (userToCopy) => {
+        setFormData(prev => ({
+            ...prev, copyFromUser: userToCopy,
+            department: userToCopy?.department || prev.department,
+            server: userToCopy?.server || prev.server,
+            description: `Profil copié de ${userToCopy?.username || ''}`
+        }));
+    };
 
     const validateField = (name, value) => {
         let error = '';
         switch (name) {
-            case 'username':
-                if (!value || value.length < 3) error = 'Le nom d\'utilisateur doit contenir au moins 3 caractères';
-                break;
-            case 'firstName':
-                if (!value) error = 'Le prénom est obligatoire';
-                break;
-            case 'lastName':
-                if (!value) error = 'Le nom est obligatoire';
-                break;
-            case 'email':
-                if (!value || !value.includes('@')) error = 'Une adresse email valide est requise';
-                break;
-            case 'password':
-                if (!value || value.length < 8) error = 'Le mot de passe doit contenir au moins 8 caractères';
-                else {
-                    const hasUpperCase = /[A-Z]/.test(value);
-                    const hasLowerCase = /[a-z]/.test(value);
-                    const hasNumber = /[0-9]/.test(value);
-                    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(value);
-                    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
-                        error = 'Majuscule, minuscule, chiffre et caractère spécial requis';
-                    }
-                }
-                break;
-            case 'confirmPassword':
-                if (value !== formData.password) error = 'Les mots de passe ne correspondent pas';
-                break;
-            default:
-                break;
+            case 'username': if (!value || value.length < 3) error = 'Le nom d\'utilisateur doit contenir au moins 3 caractères'; break;
+            case 'firstName': if (!value) error = 'Le prénom est obligatoire'; break;
+            case 'lastName': if (!value) error = 'Le nom est obligatoire'; break;
+            case 'email': if (!value || !/\S+@\S+\.\S+/.test(value)) error = 'Une adresse email valide est requise'; break;
+            case 'password': if (!value || value.length < 8) error = 'Le mot de passe doit contenir au moins 8 caractères'; break;
+            case 'confirmPassword': if (value !== formData.password) error = 'Les mots de passe ne correspondent pas'; break;
+            default: break;
         }
         return error;
     }
@@ -86,14 +120,9 @@ const CreateAdUserDialog = ({ open, onClose, onSuccess, defaultOU = "OU=Users,DC
     const handleChange = (e) => {
         const { name, value, checked, type } = e.target;
         const fieldValue = type === 'checkbox' ? checked : value;
-        setFormData(prev => ({
-            ...prev,
-            [name]: fieldValue
-        }));
-
+        setFormData(prev => ({ ...prev, [name]: fieldValue }));
         const error = validateField(name, fieldValue);
         setFieldErrors(prev => ({ ...prev, [name]: error }));
-
         if (name === 'password') {
             const confirmPasswordError = validateField('confirmPassword', formData.confirmPassword);
             setFieldErrors(prev => ({ ...prev, confirmPassword: confirmPasswordError }));
@@ -105,73 +134,44 @@ const CreateAdUserDialog = ({ open, onClose, onSuccess, defaultOU = "OU=Users,DC
         const fieldsToValidate = ['username', 'firstName', 'lastName', 'email', 'password', 'confirmPassword'];
         fieldsToValidate.forEach(field => {
             const error = validateField(field, formData[field]);
-            if (error) {
-                newErrors[field] = error;
-            }
+            if (error) newErrors[field] = error;
         });
-
         setFieldErrors(newErrors);
         const isValid = Object.keys(newErrors).length === 0;
-        if (!isValid) {
-            setError('Veuillez corriger les erreurs dans le formulaire.');
-        }
+        if (!isValid) setError('Veuillez corriger les erreurs dans le formulaire.');
         return isValid;
     };
 
     const handleSubmit = async () => {
         if (!validateForm()) return;
-
         setIsLoading(true);
         setError('');
         setSuccess('');
-
         try {
-            // Générer automatiquement le displayName si non fourni
             const displayName = formData.displayName || `${formData.firstName} ${formData.lastName}`;
-
-            // Créer l'utilisateur dans Active Directory
-            const result = await window.electronAPI.createAdUser({
-                username: formData.username,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                displayName: displayName,
-                email: formData.email,
-                password: formData.password,
-                ouPath: formData.ouPath,
-                changePasswordAtLogon: formData.changePasswordAtLogon,
-                description: formData.description,
+            const adResult = await apiService.createAdUser({
+                ...formData, displayName, copyFromUsername: formData.copyFromUser?.username,
+                userCannotChangePassword: true, passwordNeverExpires: true,
             });
-
-            if (result.success) {
-                setSuccess(`Utilisateur ${formData.username} créé avec succès dans Active Directory !`);
-                
-                // Optionnel: Ajouter aussi dans le fichier Excel local
-                if (formData.addToExcel) {
-                    try {
-                        await window.electronAPI.saveUserToExcel({
-                            user: {
-                                username: formData.username,
-                                displayName: displayName,
-                                email: formData.email,
-                                department: 'IT',
-                                server: 'SRV-RDS-1',
-                                createdAt: new Date().toISOString(),
-                            }
-                        });
-                        console.log('Utilisateur ajouté au fichier Excel local');
-                    } catch (excelError) {
-                        console.warn('Erreur ajout Excel:', excelError);
-                    }
+            if (!adResult.success) throw new Error(`Erreur AD: ${adResult.error}`);
+            setSuccess(`Utilisateur ${formData.username} créé dans AD.`);
+            if (formData.addToExcel) {
+                const excelResult = await apiService.saveUserToExcel({
+                    user: {
+                        ...formData, displayName, officePassword: formData.officePassword || formData.password,
+                        createdAt: new Date().toISOString(),
+                    }, isEdit: false
+                });
+                if (!excelResult.success) {
+                    showNotification('warning', `Utilisateur créé dans AD, mais échec de l'ajout à Excel: ${excelResult.error}`);
+                } else {
+                    setSuccess(`Utilisateur ${formData.username} créé dans AD et ajouté à Excel !`);
                 }
-
-                // Attendre 2 secondes avant de fermer
-                setTimeout(() => {
-                    if (onSuccess) onSuccess(result);
-                    onClose();
-                }, 2000);
-            } else {
-                setError(result.error || 'Erreur lors de la création de l\'utilisateur');
             }
+            setTimeout(() => {
+                if (onSuccess) onSuccess(adResult);
+                onClose();
+            }, 2500);
         } catch (err) {
             setError(`Erreur: ${err.message}`);
         } finally {
@@ -179,250 +179,69 @@ const CreateAdUserDialog = ({ open, onClose, onSuccess, defaultOU = "OU=Users,DC
         }
     };
 
-    const generatePassword = () => {
-        const length = 12;
-        const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-        let password = "";
-        
-        // S'assurer d'avoir au moins un de chaque type
-        password += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)];
-        password += "abcdefghijklmnopqrstuvwxyz"[Math.floor(Math.random() * 26)];
-        password += "0123456789"[Math.floor(Math.random() * 10)];
-        password += "!@#$%^&*"[Math.floor(Math.random() * 8)];
-        
-        // Compléter jusqu'à la longueur voulue
-        for (let i = 4; i < length; i++) {
-            password += charset.charAt(Math.floor(Math.random() * charset.length));
+    const generateRdsPassword = () => {
+        const { firstName, lastName } = formData;
+        if (!firstName || !lastName) {
+            showNotification('warning', 'Veuillez d\'abord saisir le prénom et le nom.'); return;
         }
-        
-        // Mélanger les caractères
-        password = password.split('').sort(() => Math.random() - 0.5).join('');
-        
-        setFormData(prev => ({
-            ...prev,
-            password: password,
-            confirmPassword: password
-        }));
+        const prenom = firstName.substring(0, 2).toLowerCase();
+        const nom = lastName.substring(0, 2).toLowerCase();
+        const digits = Math.floor(100 + Math.random() * 900);
+        const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', special = '!@#$%&';
+        const randomUpper = upper[Math.floor(Math.random() * upper.length)] + upper[Math.floor(Math.random() * upper.length)];
+        const randomSpecial = special[Math.floor(Math.random() * special.length)];
+        const pwd = `${prenom}${nom}${digits}${randomUpper}${randomSpecial}`;
+        setFormData(prev => ({ ...prev, password: pwd, confirmPassword: pwd }));
+        setFieldErrors(prev => ({ ...prev, password: '', confirmPassword: '' }));
+    };
+
+    const generateOfficePassword = () => {
+        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let pwd = '';
+        for (let i = 0; i < 16; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+        setFormData(prev => ({ ...prev, officePassword: pwd }));
     };
 
     return (
-        <Dialog
-            open={open}
-            onClose={onClose}
-            maxWidth="md"
-            fullWidth
-            TransitionComponent={Transition}
-            aria-labelledby="ad-user-dialog-title"
-            aria-describedby="ad-user-dialog-description"
-        >
-            <DialogTitle id="ad-user-dialog-title">
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PersonAddIcon />
-                    Créer un utilisateur Active Directory
-                </Box>
-            </DialogTitle>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth TransitionComponent={Transition}>
+            <DialogTitle><Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><PersonAddIcon />Créer un utilisateur (AD + Excel)</Box></DialogTitle>
             <DialogContent dividers>
-                <Typography id="ad-user-dialog-description" style={{ display: 'none' }}>
-                    Formulaire pour créer un utilisateur Active Directory.
-                </Typography>
                 {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
                 {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-
-                <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3 }}>
-                    <Typography variant="body2">
-                        Cette action créera un nouvel utilisateur directement dans Active Directory.
-                        Assurez-vous d'avoir les permissions nécessaires.
-                    </Typography>
-                </Alert>
-
+                <Alert severity="info" icon={<InfoIcon />} sx={{ mb: 3 }}>Vous pouvez copier les groupes et paramètres d'un utilisateur existant.</Alert>
                 <Grid container spacing={2}>
-                    {/* Informations de base */}
-                    <Grid item xs={12}>
-                        <Typography variant="subtitle2" gutterBottom>
-                            Informations de base
-                        </Typography>
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            name="username"
-                            label="Nom d'utilisateur *"
-                            value={formData.username}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.username}
-                            helperText={fieldErrors.username || "Utilisé pour la connexion (ex: j.dupont)"}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={6}>
-                        <TextField
-                            name="email"
-                            label="Email *"
-                            type="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.email}
-                            helperText={fieldErrors.email || "Adresse email professionnelle"}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            name="firstName"
-                            label="Prénom *"
-                            value={formData.firstName}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.firstName}
-                            helperText={fieldErrors.firstName}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            name="lastName"
-                            label="Nom *"
-                            value={formData.lastName}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.lastName}
-                            helperText={fieldErrors.lastName}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={4}>
-                        <TextField
-                            name="displayName"
-                            label="Nom d'affichage"
-                            value={formData.displayName}
-                            onChange={handleChange}
-                            fullWidth
-                            helperText="Laissez vide pour auto-générer"
-                        />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <Divider sx={{ my: 1 }} />
-                        <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <LockIcon fontSize="small" />
-                            Mot de passe
-                        </Typography>
-                    </Grid>
-
-                    <Grid item xs={12} sm={5}>
-                        <TextField
-                            name="password"
-                            label="Mot de passe *"
-                            type="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.password}
-                            helperText={fieldErrors.password || "Min. 8 caractères, mixte"}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={5}>
-                        <TextField
-                            name="confirmPassword"
-                            label="Confirmer le mot de passe *"
-                            type="password"
-                            value={formData.confirmPassword}
-                            onChange={handleChange}
-                            fullWidth
-                            required
-                            error={!!fieldErrors.confirmPassword}
-                            helperText={fieldErrors.confirmPassword}
-                        />
-                    </Grid>
-
-                    <Grid item xs={12} sm={2}>
-                        <Button 
-                            variant="outlined" 
-                            onClick={generatePassword}
-                            fullWidth
-                            sx={{ height: '56px' }}
-                        >
-                            Générer
-                        </Button>
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    name="changePasswordAtLogon"
-                                    checked={formData.changePasswordAtLogon}
-                                    onChange={handleChange}
-                                />
-                            }
-                            label="Forcer le changement de mot de passe à la première connexion"
-                        />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <Divider sx={{ my: 1 }} />
-                        <Typography variant="subtitle2" gutterBottom>
-                            Informations complémentaires
-                        </Typography>
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <TextField
-                            name="ouPath"
-                            label="Chemin OU (Organizational Unit)"
-                            value={formData.ouPath}
-                            onChange={handleChange}
-                            fullWidth
-                            helperText="Ex: OU=Users,DC=anecoopfr,DC=local"
-                        />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <TextField
-                            name="description"
-                            label="Description (optionnel)"
-                            value={formData.description}
-                            onChange={handleChange}
-                            fullWidth
-                            multiline
-                            rows={2}
-                            placeholder="Fonction, service, etc."
-                        />
-                    </Grid>
-
-                    <Grid item xs={12}>
-                        <FormControlLabel
-                            control={
-                                <Checkbox
-                                    name="addToExcel"
-                                    checked={formData.addToExcel}
-                                    onChange={handleChange}
-                                />
-                            }
-                            label="Ajouter également dans le fichier Excel local"
-                        />
-                    </Grid>
+                    <Grid item xs={12}><Divider><Chip label="Copier un profil (Optionnel)" icon={<ContentCopyIcon />} /></Divider></Grid>
+                    <Grid item xs={12}><Autocomplete options={allUsers} getOptionLabel={(o) => `${o.displayName} (${o.username})`} value={formData.copyFromUser} onChange={(e, v) => handleCopyFromUser(v)} renderInput={(params) => <TextField {...params} label="Copier les groupes et paramètres d'un utilisateur" />} /></Grid>
+                    <Grid item xs={12}><Divider sx={{ my: 1 }}><Chip label="Informations du nouvel utilisateur" /></Divider></Grid>
+                    <Grid item xs={12} sm={6}><TextField name="firstName" label="Prénom *" value={formData.firstName} onChange={handleChange} fullWidth required error={!!fieldErrors.firstName} helperText={fieldErrors.firstName} /></Grid>
+                    <Grid item xs={12} sm={6}><TextField name="lastName" label="Nom *" value={formData.lastName} onChange={handleChange} fullWidth required error={!!fieldErrors.lastName} helperText={fieldErrors.lastName} /></Grid>
+                    {/* MODIFIÉ: Libellé mis à jour pour Sage */}
+                    <Grid item xs={12} sm={6}><TextField name="username" label="Login (Windows / Sage) *" value={formData.username} onChange={handleChange} fullWidth required error={!!fieldErrors.username} helperText={fieldErrors.username || "Généré automatiquement"} InputProps={{ readOnly: true }} /></Grid>
+                    <Grid item xs={12} sm={6}><TextField name="email" label="Email *" type="email" value={formData.email} onChange={handleChange} fullWidth required error={!!fieldErrors.email} helperText={fieldErrors.email} /></Grid>
+                    <Grid item xs={12} sm={6}><TextField name="displayName" label="Nom d'affichage" value={formData.displayName} onChange={handleChange} fullWidth helperText="Laissez vide pour auto-générer" /></Grid>
+                    <Grid item xs={12} sm={6}><Autocomplete freeSolo options={departments} value={formData.department || ''} onInputChange={(e, v) => setFormData(p => ({ ...p, department: v }))} renderInput={(params) => <TextField {...params} label="Service / Département" />} /></Grid>
+                    <Grid item xs={12}><Divider sx={{ my: 1 }}><Chip label="Mots de passe" icon={<LockIcon />} /></Divider></Grid>
+                    {/* MODIFIÉ: Libellé mis à jour pour Sage */}
+                    <Grid item xs={12}><PasswordInput label="Mot de passe (Windows / RDS / Sage) *" name="password" value={formData.password} onChange={handleChange} onGenerate={generateRdsPassword} error={fieldErrors.password} helperText="Min. 8 caractères" /></Grid>
+                    <Grid item xs={12}><PasswordInput label="Mot de passe Office" name="officePassword" value={formData.officePassword} onChange={handleChange} onGenerate={generateOfficePassword} helperText="Si vide, utilise le mot de passe Windows" /></Grid>
+                    <Grid item xs={12}><FormControlLabel control={<Checkbox name="changePasswordAtLogon" checked={formData.changePasswordAtLogon} onChange={handleChange} />} label="Forcer le changement de mot de passe à la première connexion" /></Grid>
+                    <Grid item xs={12}><Divider sx={{ my: 1 }}><Chip label="Informations complémentaires" /></Divider></Grid>
+                    <Grid item xs={12} sm={6}><FormControl fullWidth><InputLabel>Serveur RDS</InputLabel><Select name="server" value={formData.server} label="Serveur RDS" onChange={handleChange}>{servers.map(s => <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl></Grid>
+                    <Grid item xs={12} sm={6}><TextField name="ouPath" label="Chemin OU" value={formData.ouPath} onChange={handleChange} fullWidth helperText="Ex: OU=Users,DC=anecoopfr,DC=local" /></Grid>
+                    <Grid item xs={12}><TextField name="description" label="Description (pour AD)" value={formData.description} onChange={handleChange} fullWidth multiline rows={2} /></Grid>
+                    <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
+                    <Grid item xs={12}><FormControlLabel control={<Checkbox name="addToExcel" checked={formData.addToExcel} onChange={handleChange} />} label="Ajouter l'utilisateur dans le fichier Excel de suivi" /></Grid>
                 </Grid>
             </DialogContent>
             <DialogActions>
-                <Button onClick={onClose} disabled={isLoading}>
-                    Annuler
-                </Button>
-                <Button 
-                    onClick={handleSubmit} 
-                    variant="contained" 
+                <Button onClick={onClose} disabled={isLoading}>Annuler</Button>
+                <Button
+                    onClick={handleSubmit}
+                    variant="contained"
                     disabled={isLoading}
                     startIcon={isLoading ? <CircularProgress size={20} /> : <PersonAddIcon />}
                 >
-                    {isLoading ? 'Création en cours...' : 'Créer l\'utilisateur'}
+                    {isLoading ? 'Création...' : "Créer l'utilisateur"}
                 </Button>
             </DialogActions>
         </Dialog>

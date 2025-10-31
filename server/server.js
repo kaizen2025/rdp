@@ -1,14 +1,13 @@
-// server/server.js - VERSION FINALE, COMPLÈTE ET SIMPLIFIÉE
+// server/server.js - VERSION FINALE ULTRA-RAPIDE
 
+// ... (tous les imports restent les mêmes)
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const os = require('os');
 const path = require('path');
-const fs = require('fs');
 
-// --- IMPORTS DES SERVICES DE L'APPLICATION ---
 const configService = require('../backend/services/configService');
 const databaseService = require('../backend/services/databaseService');
 const notificationService = require('../backend/services/notificationService');
@@ -16,9 +15,12 @@ const dataService = require('../backend/services/dataService');
 const rdsService = require('../backend/services/rdsService');
 const technicianService = require('../backend/services/technicianService');
 const userService = require('../backend/services/userService');
+const adCacheService = require('../backend/services/adCacheService');
 const apiRoutes = require('./apiRoutes');
 const { findAllPorts, savePorts, isPortAvailable } = require('../backend/utils/portUtils');
 
+
+// ... (le début du fichier jusqu'à startServer reste identique)
 let API_PORT = 3002;
 let WS_PORT = 3003;
 const app = express();
@@ -40,7 +42,6 @@ function getAllowedOrigins() {
     origins.add(`http://${os.hostname()}:${API_PORT}`);
     return Array.from(origins);
 }
-
 app.use(cors({
     origin: function (origin, callback) {
         const allowedOrigins = getAllowedOrigins();
@@ -67,7 +68,6 @@ function initializeWebSocket() {
 function broadcast(data) {
     if (!wss) return;
     const jsonData = JSON.stringify(data);
-    console.log(`🚀 Diffusion WebSocket : type=${data.type}, entity=${data.payload?.entity}`);
     wss.clients.forEach(client => {
         if (client.readyState === client.OPEN) client.send(jsonData);
     });
@@ -75,47 +75,59 @@ function broadcast(data) {
 
 function startBackgroundTasks() {
     console.log('🕒 Planification des tâches de fond...');
-    setInterval(async () => {
-        console.log('🔍 Exécution de la tâche : Vérification des prêts...');
-        try {
-            const loans = await dataService.getLoans();
-            const settings = await dataService.getLoanSettings();
-            if (settings.autoNotifications) {
-                const newNotifications = await notificationService.checkAllLoansForNotifications(loans, settings);
-                if (newNotifications?.length > 0) {
-                    console.log(`📢 ${newNotifications.length} nouvelle(s) notification(s) de prêt créée(s).`);
-                    broadcast({ type: 'data_updated', payload: { entity: 'notifications' } });
-                }
+    
+    const runAsyncTask = (name, taskFn, interval, initialDelay = 2000) => {
+        const run = async () => {
+            console.log(`[Task: ${name}] 🚀 Démarrage...`);
+            try {
+                await taskFn();
+                console.log(`[Task: ${name}] ✅ Terminé.`);
+            } catch (error) {
+                console.error(`[Task: ${name}] ❌ Erreur:`, error);
             }
-        } catch (error) { console.error("❌ Erreur lors de la vérification des prêts:", error); }
+        };
+        setTimeout(run, initialDelay);
+        setInterval(run, interval);
+    };
+
+    // ✅ NOUVEAU : Synchronisation Excel en tâche de fond
+    runAsyncTask('Excel Sync', async () => {
+        const syncResult = await userService.syncUsersFromExcel(false);
+        if (syncResult.success && syncResult.usersCount > 0) {
+            broadcast({ type: 'data_updated', payload: { entity: 'excel_users' } });
+        }
+    }, 10 * 60 * 1000, 5000); // Toutes les 10 min, premier lancement après 5s
+
+    runAsyncTask('RDS Sessions', async () => {
+        const result = await rdsService.refreshAndStoreRdsSessions();
+        if (result.success) broadcast({ type: 'data_updated', payload: { entity: 'rds_sessions' } });
+    }, 30 * 1000);
+
+    runAsyncTask('Loan Check', async () => {
+        const loans = await dataService.getLoans();
+        const settings = await dataService.getLoanSettings();
+        if (settings.autoNotifications) {
+            const newNotifications = await notificationService.checkAllLoansForNotifications(loans, settings);
+            if (newNotifications?.length > 0) {
+                broadcast({ type: 'data_updated', payload: { entity: 'notifications' } });
+            }
+        }
     }, 15 * 60 * 1000);
 
-    setInterval(() => technicianService.updateAllTechniciansPresence(), 2 * 60 * 1000);
-    setInterval(async () => {
-        console.log('🔄 Exécution de la tâche : Rafraîchissement des sessions RDS...');
-        try {
-            const result = await rdsService.refreshAndStoreRdsSessions();
-            if (result.success) broadcast({ type: 'data_updated', payload: { entity: 'rds_sessions' } });
-        } catch (error) { console.error("❌ Erreur lors du rafraîchissement des sessions RDS:", error); }
-    }, 30 * 1000);
+    runAsyncTask('Technician Presence', technicianService.updateAllTechniciansPresence, 2 * 60 * 1000);
+    runAsyncTask('AD Status Cache', adCacheService.updateUserAdStatuses, 5 * 60 * 1000, 15000); // Lancement après 15s
+
     console.log('✅ Tâches de fond planifiées.');
 }
 
 async function startServer() {
     try {
         const isProduction = process.env.NODE_ENV === 'production' || process.env.RUNNING_IN_ELECTRON === 'true';
-
         if (isProduction) {
-            console.log('\n🔧 Mode Production : Utilisation des ports fixes.');
-            API_PORT = 3002;
-            WS_PORT = 3003;
-            if (!(await isPortAvailable(API_PORT))) throw new Error(`Le port API ${API_PORT} est déjà utilisé.`);
-            if (!(await isPortAvailable(WS_PORT))) throw new Error(`Le port WebSocket ${WS_PORT} est déjà utilisé.`);
+            API_PORT = 3002; WS_PORT = 3003;
         } else {
-            console.log('\n🔧 Mode Développement : Allocation automatique des ports...\n');
             const ports = await findAllPorts({ http: { start: 3002, end: 3012 }, websocket: { start: 3003, end: 3013 } });
-            API_PORT = ports.http;
-            WS_PORT = ports.websocket;
+            API_PORT = ports.http; WS_PORT = ports.websocket;
             await savePorts(ports);
         }
 
@@ -132,25 +144,25 @@ async function startServer() {
         databaseService.connect();
         console.log('✅ Base de données connectée.');
         
-        const syncResult = await userService.syncUsersFromExcel(false);
-        if (syncResult.success) console.log(`✅ ${syncResult.usersCount} utilisateurs synchronisés.`);
-        else console.warn(`⚠️  Échec synchro: ${syncResult.error}`);
+        // ✅ SUPPRESSION de la synchro bloquante ici
 
         initializeWebSocket();
         app.use('/api', apiRoutes(broadcast));
         console.log('✅ Routes API configurées.');
+        
+        // Démarrage des tâches de fond APRÈS que le serveur soit prêt
         startBackgroundTasks();
 
         if (isProduction) {
             const buildPath = path.join(__dirname, '..', 'build');
             app.use(express.static(buildPath));
             app.get('*', (req, res) => res.sendFile(path.join(buildPath, 'index.html')));
-            console.log(`✅ Service des fichiers statiques configuré.`);
         }
 
         server.listen(API_PORT, () => {
-            console.log(`\n📡 Serveur API démarré sur http://localhost:${API_PORT}`);
-            console.log(`⚡ WebSocket à l'écoute sur le port ${WS_PORT}`);
+            console.log(`\n\n🚀 SERVEUR PRÊT !`);
+            console.log(`   - API sur http://localhost:${API_PORT}`);
+            console.log(`   - WebSocket sur le port ${WS_PORT}\n`);
         });
     } catch (error) {
         console.error("❌ ERREUR CRITIQUE AU DÉMARRAGE :", error.message);

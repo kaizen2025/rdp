@@ -1,10 +1,10 @@
-// src/pages/UsersManagementPage.js - VERSION FINALE AVEC CACHE ET CORRECTIONS ESLINT
+// src/pages/UsersManagementPage.js - VERSION FINALE AVEC RENDU CONDITIONNEL
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-import { Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress, FormControl, InputLabel, Select, MenuItem, Chip, Grid } from '@mui/material';
-import { PersonAdd as PersonAddIcon, Refresh as RefreshIcon, Clear as ClearIcon, Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon, VpnKey as VpnKeyIcon, Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon, Dns as DnsIcon, Login as LoginIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress, FormControl, InputLabel, Select, MenuItem, Chip, Grid, Checkbox } from '@mui/material';
+import { PersonAdd as PersonAddIcon, Refresh as RefreshIcon, Clear as ClearIcon, Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon, VpnKey as VpnKeyIcon, Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon, Dns as DnsIcon, Login as LoginIcon, Circle as CircleIcon } from '@mui/icons-material';
 
 import { useApp } from '../contexts/AppContext';
 import { useCache } from '../contexts/CacheContext';
@@ -12,6 +12,7 @@ import apiService from '../services/apiService';
 import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
 import AdActionsDialog from '../components/AdActionsDialog';
+import CreateAdUserDialog from '../components/CreateAdUserDialog';
 import PasswordCompact from '../components/PasswordCompact';
 import CopyableText from '../components/CopyableText';
 import PageHeader from '../components/common/PageHeader';
@@ -19,7 +20,6 @@ import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
 
-// ... (Le reste du fichier est identique, je le remets pour être complet)
 const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     const isVpn = groupName === 'VPN';
     const icon = isVpn ? <VpnKeyIcon sx={{ fontSize: '14px' }} /> : <LanguageIcon sx={{ fontSize: '14px' }} />;
@@ -31,10 +31,12 @@ const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
         </Tooltip>
     );
 });
-const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCredentials, onPrint, onOpenAdDialog, vpnMembers, internetMembers, onMembershipChange }) => {
+
+const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCredentials, onPrint, onOpenAdDialog, vpnMembers, internetMembers, onMembershipChange, onSelect, isSelected }) => {
     const { showNotification } = useApp();
     const [isUpdatingVpn, setIsUpdatingVpn] = useState(false);
     const [isUpdatingInternet, setIsUpdatingInternet] = useState(false);
+    
     const toggleGroup = useCallback(async (group, isMember, setLoading) => {
         setLoading(true);
         try {
@@ -45,9 +47,18 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCrede
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
         finally { setLoading(false); }
     }, [user.username, onMembershipChange, showNotification]);
+
+    const adStatus = user.adEnabled === 1 ? 'enabled' : user.adEnabled === 0 ? 'disabled' : 'unknown';
+    const statusColor = adStatus === 'enabled' ? 'success.main' : adStatus === 'disabled' ? 'error.main' : 'action.disabled';
+    const statusTooltip = adStatus === 'enabled' ? 'Compte AD activé' : adStatus === 'disabled' ? 'Compte AD désactivé' : 'Statut AD non vérifié';
+
     return (
         <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, backgroundColor: isOdd ? 'grey.50' : 'white', borderBottom: '1px solid #e0e0e0', '&:hover': { backgroundColor: 'action.hover' }, gap: 2 }}>
-            <Box sx={{ flex: '1 1 150px', minWidth: 120, overflow: 'hidden' }}><Typography variant="body2" fontWeight="bold" noWrap>{user.displayName}</Typography><CopyableText text={user.username} /></Box>
+            <Checkbox checked={isSelected} onChange={() => onSelect(user.username)} sx={{ p: 0, mr: 1 }} />
+            <Box sx={{ flex: '1 1 150px', minWidth: 120, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Tooltip title={statusTooltip}><CircleIcon sx={{ fontSize: 10, color: statusColor }} /></Tooltip>
+                <Box><Typography variant="body2" fontWeight="bold" noWrap>{user.displayName}</Typography><CopyableText text={user.username} /></Box>
+            </Box>
             <Box sx={{ flex: '0.8 1 100px', minWidth: 80 }}><Typography variant="body2">{user.department || '-'}</Typography></Box>
             <Box sx={{ flex: '1.2 1 180px', minWidth: 150, overflow: 'hidden' }}><CopyableText text={user.email} /></Box>
             <Box sx={{ flex: '1 1 160px', minWidth: 140, display: 'flex', flexDirection: 'column', gap: 0.5 }}><PasswordCompact password={user.password} label="RDS" /><PasswordCompact password={user.officePassword} label="Office" /></Box>
@@ -70,12 +81,8 @@ const UsersManagementPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [serverFilter, setServerFilter] = useState('all');
     const [departmentFilter, setDepartmentFilter] = useState('all');
-    const [userDialogOpen, setUserDialogOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
-    const [userToPrint, setUserToPrint] = useState(null);
-    const [adDialogOpen, setAdDialogOpen] = useState(false);
-    const [selectedUserForAd, setSelectedUserForAd] = useState(null);
+    const [dialog, setDialog] = useState({ type: null, data: null });
+    const [selectedUsernames, setSelectedUsernames] = useState(new Set());
 
     const users = useMemo(() => (cache.excel_users && typeof cache.excel_users === 'object') ? Object.values(cache.excel_users).flat() : [], [cache.excel_users]);
     const vpnMembers = useMemo(() => new Set((cache['ad_groups:VPN'] || []).map(m => m.SamAccountName)), [cache]);
@@ -114,10 +121,10 @@ const UsersManagementPage = () => {
     
     const handleSaveUser = async (userData) => {
         try {
-            await apiService.saveUserToExcel({ user: userData, isEdit: !!selectedUser });
+            await apiService.saveUserToExcel({ user: userData, isEdit: !!dialog.data });
             showNotification('success', 'Utilisateur sauvegardé.');
             await invalidate('excel_users');
-            setUserDialogOpen(false);
+            setDialog({ type: null, data: null });
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     };
 
@@ -140,18 +147,40 @@ const UsersManagementPage = () => {
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
     }, [showNotification]);
 
-    const Row = useCallback(({ index, style }) => (
-        <UserRow
-            user={filteredUsers[index]} style={style} isOdd={index % 2 === 1}
-            onEdit={u => { setSelectedUser(u); setUserDialogOpen(true); }}
-            onDelete={handleDeleteUser}
-            onConnectWithCredentials={handleConnectUserWithCredentials}
-            onPrint={u => { setUserToPrint(u); setPrintPreviewOpen(true); }}
-            onOpenAdDialog={u => { setSelectedUserForAd(u); setAdDialogOpen(true); }}
-            vpnMembers={vpnMembers} internetMembers={internetMembers}
-            onMembershipChange={() => { invalidate('ad_groups:VPN'); invalidate('ad_groups:Sortants_responsables'); }}
-        />
-    ), [filteredUsers, vpnMembers, internetMembers, handleDeleteUser, handleConnectUserWithCredentials, invalidate]);
+    const handleSelectUser = (username) => {
+        setSelectedUsernames(prev => {
+            const newSelection = new Set(prev);
+            if (newSelection.has(username)) newSelection.delete(username);
+            else newSelection.add(username);
+            return newSelection;
+        });
+    };
+
+    const handleSelectAll = (event) => {
+        if (event.target.checked) {
+            setSelectedUsernames(new Set(filteredUsers.map(u => u.username)));
+        } else {
+            setSelectedUsernames(new Set());
+        }
+    };
+
+    const Row = useCallback(({ index, style }) => {
+        const user = filteredUsers[index];
+        return (
+            <UserRow
+                user={user} style={style} isOdd={index % 2 === 1}
+                onEdit={u => setDialog({ type: 'editExcel', data: u })}
+                onDelete={handleDeleteUser}
+                onConnectWithCredentials={handleConnectUserWithCredentials}
+                onPrint={u => setDialog({ type: 'print', data: u })}
+                onOpenAdDialog={u => setDialog({ type: 'adActions', data: u })}
+                vpnMembers={vpnMembers} internetMembers={internetMembers}
+                onMembershipChange={() => { invalidate('ad_groups:VPN'); invalidate('ad_groups:Sortants_responsables'); }}
+                onSelect={handleSelectUser}
+                isSelected={selectedUsernames.has(user.username)}
+            />
+        );
+    }, [filteredUsers, vpnMembers, internetMembers, handleDeleteUser, handleConnectUserWithCredentials, invalidate, selectedUsernames]);
     
     const clearFilters = () => { setSearchTerm(''); setServerFilter('all'); setDepartmentFilter('all'); };
 
@@ -173,7 +202,16 @@ const UsersManagementPage = () => {
                 ]}
                 actions={
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => { setSelectedUser(null); setUserDialogOpen(true); }} sx={{ borderRadius: 2 }}>Ajouter</Button>
+                        {selectedUsernames.size > 0 && (
+                            <Button 
+                                variant="outlined" 
+                                startIcon={<PrintIcon />} 
+                                onClick={() => setDialog({ type: 'print', data: users.filter(u => selectedUsernames.has(u.username)) })}
+                            >
+                                Imprimer ({selectedUsernames.size})
+                            </Button>
+                        )}
+                        <Button variant="contained" startIcon={<PersonAddIcon />} onClick={() => setDialog({ type: 'createAd' })} sx={{ borderRadius: 2 }}>Ajouter</Button>
                         <Tooltip title="Actualiser les données (Excel + AD)">
                             <span><IconButton onClick={handleRefresh} disabled={isRefreshing} color="primary">{isRefreshing ? <CircularProgress size={24} color="inherit" /> : <RefreshIcon />}</IconButton></span>
                         </Tooltip>
@@ -193,11 +231,17 @@ const UsersManagementPage = () => {
 
             {!filteredUsers.length ? (
                 <Paper elevation={2} sx={{ p: 4, borderRadius: 2 }}>
-                    <EmptyState type={searchTerm ? 'search' : 'empty'} title={searchTerm ? 'Aucun utilisateur trouvé' : 'Aucun utilisateur'} onAction={searchTerm ? clearFilters : () => { setSelectedUser(null); setUserDialogOpen(true); }} />
+                    <EmptyState type={searchTerm ? 'search' : 'empty'} title={searchTerm ? 'Aucun utilisateur trouvé' : 'Aucun utilisateur'} onAction={searchTerm ? clearFilters : () => setDialog({ type: 'createAd' })} />
                 </Paper>
             ) : (
                 <Paper elevation={2} sx={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2, minHeight: 500 }}>
-                    <Box sx={{ px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', display: 'flex', gap: 2, fontWeight: 600 }}>
+                    <Box sx={{ px: 2, py: 1.5, backgroundColor: 'primary.main', color: 'white', display: 'flex', gap: 2, fontWeight: 600, alignItems: 'center' }}>
+                        <Checkbox
+                            indeterminate={selectedUsernames.size > 0 && selectedUsernames.size < filteredUsers.length}
+                            checked={filteredUsers.length > 0 && selectedUsernames.size === filteredUsers.length}
+                            onChange={handleSelectAll}
+                            sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' }, p: 0, mr: 1 }}
+                        />
                         <Box sx={{ flex: '1 1 150px' }}>Utilisateur</Box><Box sx={{ flex: '0.8 1 100px' }}>Service</Box><Box sx={{ flex: '1.2 1 180px' }}>Email</Box><Box sx={{ flex: '1 1 160px' }}>Mots de passe</Box><Box sx={{ flex: '1 1 120px' }}>Groupes</Box><Box sx={{ flex: '0 0 auto', width: '180px' }}>Actions</Box>
                     </Box>
                     <Box sx={{ flex: 1, overflow: 'auto', minHeight: 400 }}>
@@ -205,9 +249,12 @@ const UsersManagementPage = () => {
                     </Box>
                 </Paper>
             )}
-            {userDialogOpen && <UserDialog open={userDialogOpen} onClose={() => setUserDialogOpen(false)} user={selectedUser} onSave={handleSaveUser} servers={servers} />}
-            {printPreviewOpen && <PrintPreviewDialog open={printPreviewOpen} onClose={() => setPrintPreviewOpen(false)} user={userToPrint} />}
-            {selectedUserForAd && <AdActionsDialog open={adDialogOpen} onClose={() => { setAdDialogOpen(false); setSelectedUserForAd(null); }} user={selectedUserForAd} onActionComplete={handleRefresh} />}
+            
+            {/* ✅ Rendu conditionnel des dialogues */}
+            {dialog.type === 'editExcel' && <UserDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} onSave={handleSaveUser} servers={servers} />}
+            {dialog.type === 'print' && <PrintPreviewDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} />}
+            {dialog.type === 'adActions' && <AdActionsDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} onActionComplete={handleRefresh} />}
+            {dialog.type === 'createAd' && <CreateAdUserDialog open={true} onClose={() => setDialog({ type: null })} onSuccess={handleRefresh} servers={servers} />}
         </Box>
     );
 };

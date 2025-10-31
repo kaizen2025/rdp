@@ -1,25 +1,33 @@
-// src/pages/ConnectionsPage.js - Version finale avec Drag-and-Drop (dnd-kit) et UI corrigée
+// src/pages/ConnectionsPage.js - VERSION FINALE AVEC NOTES ET DIALOGUE D'INFORMATIONS
 
 import React, { useState, useMemo, useEffect, memo } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions, IconButton, Tooltip, Switch, FormControlLabel, List, ListItem, ListItemText, ListItemIcon, Grid, Snackbar, TextField } from '@mui/material';
+import {
+    Box, Paper, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions,
+    IconButton, Tooltip, Switch, FormControlLabel, List, ListItem, ListItemText,
+    ListItemIcon, Grid, Snackbar, TextField, Divider
+} from '@mui/material';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 // Icons
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
-import NetworkPingIcon from '@mui/icons-material/NetworkPing';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ComputerIcon from '@mui/icons-material/Computer';
-import SaveIcon from '@mui/icons-material/Save';
-import CancelIcon from '@mui/icons-material/Cancel';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
-import InfoIcon from '@mui/icons-material/Info';
+import {
+    AdminPanelSettings as AdminPanelSettingsIcon,
+    ManageAccounts as ManageAccountsIcon,
+    NetworkPing as NetworkPingIcon,
+    Add as AddIcon,
+    Edit as EditIcon,
+    Delete as DeleteIcon,
+    Computer as ComputerIcon,
+    Save as SaveIcon,
+    Cancel as CancelIcon,
+    DragIndicator as DragIndicatorIcon,
+    Info as InfoIcon,
+    Notes as NotesIcon
+} from '@mui/icons-material';
 
+// ... (ManualConnectionDialog et GroupEditDialog restent identiques)
 const ManualConnectionDialog = ({ open, server, config, onClose, onSubmit }) => {
     const [credentials, setCredentials] = useState({ username: '', password: '', domain: '' });
     useEffect(() => { if (open) setCredentials({ username: '', password: '', domain: config?.domain || '' }); }, [open, config]);
@@ -37,6 +45,106 @@ const ManualConnectionDialog = ({ open, server, config, onClose, onSubmit }) => 
     );
 };
 
+const GroupEditDialog = ({ open, type, item, onClose, onSubmit }) => {
+    const [value, setValue] = useState('');
+    useEffect(() => { if (open) setValue(item || ''); }, [open, item]);
+    const title = type === 'addGroup' ? "Créer un groupe" : `Renommer "${item}"`;
+    return (<Dialog open={open} onClose={onClose}><DialogTitle>{title}</DialogTitle><DialogContent><TextField autoFocus margin="dense" label="Nom du groupe" fullWidth value={value} onChange={e => setValue(e.target.value)} /></DialogContent><DialogActions><Button onClick={onClose}>Annuler</Button><Button onClick={() => { onSubmit(value); onClose(); }}>Confirmer</Button></DialogActions></Dialog>);
+};
+
+
+// ✅ NOUVEAU: Dialogue d'informations en lecture seule
+const ServerInfoDialog = ({ open, server, onClose }) => {
+    if (!server) return null;
+    return (
+        <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <InfoIcon color="primary" /> Informations - {server.name}
+            </DialogTitle>
+            <DialogContent dividers>
+                <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}><Typography variant="caption" color="text.secondary">Nom d'affichage</Typography><Typography>{server.name}</Typography></Grid>
+                    <Grid item xs={12} sm={6}><Typography variant="caption" color="text.secondary">IP / Nom d'hôte</Typography><Typography>{server.hostname}</Typography></Grid>
+                    {server.notes && <Grid item xs={12}><Typography variant="caption" color="text.secondary">Notes rapides</Typography><Typography>{server.notes}</Typography></Grid>}
+                    {server.informations && <Grid item xs={12}><Typography variant="caption" color="text.secondary">Informations détaillées</Typography><Paper variant="outlined" sx={{ p: 1, mt: 0.5, whiteSpace: 'pre-wrap', maxHeight: 200, overflow: 'auto' }}>{server.informations}</Paper></Grid>}
+                    <Grid item xs={12}><Divider /></Grid>
+                    <Grid item xs={12}>
+                        <Typography variant="subtitle2">Identifiants spécifiques</Typography>
+                        {server.useCustomCredentials ? (
+                            <Box>
+                                <Typography>Utilisateur: {server.username}</Typography>
+                                <Typography>Domaine: {server.domain || '(par défaut)'}</Typography>
+                            </Box>
+                        ) : (
+                            <Typography color="text.secondary">Non (utilise les identifiants par défaut)</Typography>
+                        )}
+                    </Grid>
+                </Grid>
+            </DialogContent>
+            <DialogActions><Button onClick={onClose}>Fermer</Button></DialogActions>
+        </Dialog>
+    );
+};
+
+// ✅ AMÉLIORATION: Dialogue d'édition avec champ "informations"
+const ServerEditDialog = ({ open, server, groupName, onClose, onSubmit }) => {
+    const [formData, setFormData] = useState({ name: '', hostname: '', notes: '', informations: '', useCustomCredentials: false, username: '', password: '', domain: '' });
+    
+    useEffect(() => { 
+        if (open) {
+            const initialData = server 
+                ? { ...{ notes: '', informations: '', useCustomCredentials: false, username: '', password: '', domain: '' }, ...server }
+                : { name: '', hostname: '', notes: '', informations: '', useCustomCredentials: false, username: '', password: '', domain: '' };
+            setFormData(initialData);
+        }
+    }, [open, server]);
+
+    const handleChange = (e) => { 
+        const { name, value, type, checked } = e.target; 
+        setFormData(p => ({ ...p, [name]: type === 'checkbox' ? checked : value })); 
+    };
+    
+    const handleSubmit = () => { 
+        const dataToSubmit = {
+            name: formData.name,
+            hostname: formData.hostname,
+            notes: formData.notes,
+            informations: formData.informations,
+            useCustomCredentials: formData.useCustomCredentials,
+        };
+        if (formData.useCustomCredentials) {
+            dataToSubmit.username = formData.username;
+            dataToSubmit.password = formData.password;
+            dataToSubmit.domain = formData.domain;
+        }
+        onSubmit(dataToSubmit); 
+        onClose(); 
+    };
+
+    return ( 
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth> 
+            <DialogTitle>{server ? `Modifier ${server.name}` : `Ajouter un serveur à ${groupName}`}</DialogTitle> 
+            <DialogContent> 
+                <Grid container spacing={2} sx={{ pt: 1 }}> 
+                    <Grid item xs={12} sm={6}><TextField name="name" label="Nom d'affichage" value={formData.name} onChange={handleChange} fullWidth required /></Grid> 
+                    <Grid item xs={12} sm={6}><TextField name="hostname" label="IP / Nom d'hôte" value={formData.hostname} onChange={handleChange} fullWidth required /></Grid> 
+                    <Grid item xs={12}><TextField name="notes" label="Notes rapides (optionnel)" value={formData.notes} onChange={handleChange} fullWidth helperText="Info courte visible au survol de l'icône" /></Grid>
+                    <Grid item xs={12}><TextField name="informations" label="Informations détaillées (optionnel)" value={formData.informations} onChange={handleChange} fullWidth multiline rows={4} placeholder="Rôle du serveur, configuration, notes de maintenance..." /></Grid>
+                    <Grid item xs={12}><FormControlLabel control={<Switch name="useCustomCredentials" checked={formData.useCustomCredentials} onChange={handleChange} />} label="Utiliser des identifiants spécifiques pour ce serveur" /></Grid> 
+                    {formData.useCustomCredentials && (
+                        <> 
+                            <Grid item xs={12} sm={6}><TextField name="username" label="Utilisateur" value={formData.username} onChange={handleChange} fullWidth /></Grid> 
+                            <Grid item xs={12} sm={6}><TextField name="password" label="Mot de passe" type="password" value={formData.password} onChange={handleChange} fullWidth /></Grid> 
+                            <Grid item xs={12}><TextField name="domain" label="Domaine (si différent)" value={formData.domain} onChange={handleChange} fullWidth /></Grid> 
+                        </>
+                    )} 
+                </Grid> 
+            </DialogContent> 
+            <DialogActions><Button onClick={onClose}>Annuler</Button><Button onClick={handleSubmit} variant="contained">Sauvegarder</Button></DialogActions> 
+        </Dialog> 
+    );
+};
+
 const SortableServerItem = memo(({ id, server, groupName, editMode, actions }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
     const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, zIndex: isDragging ? 1 : 0, position: 'relative' };
@@ -44,7 +152,7 @@ const SortableServerItem = memo(({ id, server, groupName, editMode, actions }) =
     return (
         <ListItem ref={setNodeRef} style={style} divider secondaryAction={
             <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <Tooltip title="Informations (à venir)"><span><IconButton size="small" disabled><InfoIcon /></IconButton></span></Tooltip>
+                <Tooltip title="Informations"><IconButton size="small" onClick={() => actions.onShowInfo(server)}><InfoIcon /></IconButton></Tooltip>
                 <Tooltip title="Connexion Admin (app bureau)"><span><IconButton size="small" onClick={() => actions.onAdminConnect(server)} disabled={!window.electronAPI}><AdminPanelSettingsIcon /></IconButton></span></Tooltip>
                 <Tooltip title="Connexion Manuelle (app bureau)"><span><IconButton size="small" onClick={() => actions.onManualConnect(server)} disabled={!window.electronAPI}><ManageAccountsIcon /></IconButton></span></Tooltip>
                 <Tooltip title="Ping (app bureau)"><span><IconButton size="small" onClick={() => actions.onPing(server)} disabled={!window.electronAPI}><NetworkPingIcon /></IconButton></span></Tooltip>
@@ -58,25 +166,23 @@ const SortableServerItem = memo(({ id, server, groupName, editMode, actions }) =
         }>
             {editMode && <DragIndicatorIcon color="action" sx={{ cursor: 'grab', touchAction: 'none' }} {...attributes} {...listeners} />}
             <ListItemIcon><ComputerIcon color={server.useCustomCredentials ? "secondary" : "primary"} /></ListItemIcon>
-            <ListItemText primary={server.name} secondary={server.hostname} />
+            <ListItemText 
+                primary={
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+                        {server.name}
+                        {server.informations && <InfoIcon sx={{ ml: 1, fontSize: 16, color: 'action.active' }} />}
+                    </Box>
+                } 
+                secondary={
+                    <Box component="span" sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography component="span" variant="body2" color="text.secondary">{server.hostname}</Typography>
+                        {server.notes && <NotesIcon sx={{ ml: 1, fontSize: 16, color: 'action.active' }} />}
+                    </Box>
+                } 
+            />
         </ListItem>
     );
 });
-
-const ServerEditDialog = ({ open, server, groupName, onClose, onSubmit }) => {
-    const [formData, setFormData] = useState({ name: '', hostname: '', useCustomCredentials: false, username: '', password: '', domain: '' });
-    useEffect(() => { if (open) setFormData(server || { name: '', hostname: '', useCustomCredentials: false, username: '', password: '', domain: '' }); }, [open, server]);
-    const handleChange = (e) => { const { name, value, type, checked } = e.target; setFormData(p => ({ ...p, [name]: type === 'checkbox' ? checked : value })); };
-    const handleSubmit = () => { onSubmit(formData); onClose(); };
-    return ( <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth> <DialogTitle>{server ? `Modifier ${server.name}` : `Ajouter un serveur à ${groupName}`}</DialogTitle> <DialogContent> <Grid container spacing={2} sx={{ pt: 1 }}> <Grid item xs={12} sm={6}><TextField name="name" label="Nom d'affichage" value={formData.name} onChange={handleChange} fullWidth /></Grid> <Grid item xs={12} sm={6}><TextField name="hostname" label="IP / Nom d'hôte" value={formData.hostname} onChange={handleChange} fullWidth /></Grid> <Grid item xs={12}><FormControlLabel control={<Switch name="useCustomCredentials" checked={formData.useCustomCredentials} onChange={handleChange} />} label="Identifiants spécifiques" /></Grid> {formData.useCustomCredentials && <> <Grid item xs={12} sm={6}><TextField name="username" label="Utilisateur" value={formData.username} onChange={handleChange} fullWidth /></Grid> <Grid item xs={12} sm={6}><TextField name="password" label="Mot de passe" type="password" value={formData.password} onChange={handleChange} fullWidth /></Grid> <Grid item xs={12}><TextField name="domain" label="Domaine" value={formData.domain} onChange={handleChange} fullWidth /></Grid> </>} </Grid> </DialogContent> <DialogActions><Button onClick={onClose}>Annuler</Button><Button onClick={handleSubmit} variant="contained">Sauvegarder</Button></DialogActions> </Dialog> );
-};
-
-const GroupEditDialog = ({ open, type, item, onClose, onSubmit }) => {
-    const [value, setValue] = useState('');
-    useEffect(() => { if (open) setValue(item || ''); }, [open, item]);
-    const title = type === 'addGroup' ? "Créer un groupe" : `Renommer "${item}"`;
-    return (<Dialog open={open} onClose={onClose}><DialogTitle>{title}</DialogTitle><DialogContent><TextField autoFocus margin="dense" label="Nom du groupe" fullWidth value={value} onChange={e => setValue(e.target.value)} /></DialogContent><DialogActions><Button onClick={onClose}>Annuler</Button><Button onClick={() => { onSubmit(value); onClose(); }}>Confirmer</Button></DialogActions></Dialog>);
-};
 
 const ConnectionsPage = () => {
     const { config, handleSaveConfig, showNotification } = useApp();
@@ -93,12 +199,13 @@ const ConnectionsPage = () => {
         const upgradedGroups = {};
         for (const groupName in groups) {
             upgradedGroups[groupName] = (groups[groupName] || []).map(server =>
-                typeof server === 'string' ? { name: server, hostname: server, useCustomCredentials: false } : { ...{ useCustomCredentials: false }, ...server }
+                typeof server === 'string' ? { name: server, hostname: server } : server
             );
         }
         setEditableGroups(upgradedGroups);
     }, [config, editMode]);
 
+    // ... (toute la logique de handlePing, handleAdminConnect, handleSaveChanges, etc. reste identique)
     const filteredServerGroups = useMemo(() => {
         if (!searchTerm) return editableGroups;
         const term = searchTerm.toLowerCase();
@@ -211,7 +318,7 @@ const ConnectionsPage = () => {
                                                 server={server}
                                                 groupName={groupName}
                                                 editMode={editMode}
-                                                actions={{ onAdminConnect: handleAdminConnect, onManualConnect: handleManualConnect, onPing: handlePing, onEditServer: (g, s) => setDialog({ open: true, type: 'editServer', group: g, item: s }), onDeleteServer: (g, s) => setDialog({ open: true, type: 'deleteServer', group: g, item: s }) }}
+                                                actions={{ onShowInfo: (s) => setDialog({ open: true, type: 'showInfo', item: s }), onAdminConnect: handleAdminConnect, onManualConnect: handleManualConnect, onPing: handlePing, onEditServer: (g, s) => setDialog({ open: true, type: 'editServer', group: g, item: s }), onDeleteServer: (g, s) => setDialog({ open: true, type: 'deleteServer', group: g, item: s }) }}
                                             />
                                         ))}
                                     </SortableContext>
@@ -220,6 +327,7 @@ const ConnectionsPage = () => {
                         </Grid>
                     ))}
                 </Grid>
+                <ServerInfoDialog open={dialog.open && dialog.type === 'showInfo'} server={dialog.item} onClose={() => setDialog({ open: false })} />
                 <ServerEditDialog open={dialog.open && ['addServer', 'editServer'].includes(dialog.type)} server={dialog.item} groupName={dialog.group} onClose={() => setDialog({ open: false })} onSubmit={handleDialogSubmit} />
                 <GroupEditDialog open={dialog.open && ['addGroup', 'renameGroup'].includes(dialog.type)} type={dialog.type} item={dialog.item} onClose={() => setDialog({ open: false })} onSubmit={handleDialogSubmit} />
                 <Dialog open={dialog.open && ['deleteGroup', 'deleteServer'].includes(dialog.type)} onClose={() => setDialog({ open: false })}><DialogTitle>Confirmer</DialogTitle><DialogContent><Typography>Supprimer "{dialog.item?.name || dialog.item}" ?</Typography></DialogContent><DialogActions><Button onClick={() => setDialog({ open: false })}>Annuler</Button><Button onClick={() => { handleDialogSubmit(); setDialog({ open: false }); }} color="error">Supprimer</Button></DialogActions></Dialog>

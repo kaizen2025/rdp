@@ -1,4 +1,4 @@
-// src/components/AdActionsDialog.js - NOUVEAU COMPOSANT COMPLET
+// src/components/AdActionsDialog.js - VERSION FINALE AVEC GESTION DES GROUPES
 
 import React, { useState, useEffect, useCallback } from 'react';
 import StyledDialog from './StyledDialog';
@@ -16,6 +16,7 @@ import Divider from '@mui/material/Divider';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
+import Autocomplete from '@mui/material/Autocomplete';
 
 // Icons
 import PersonIcon from '@mui/icons-material/Person';
@@ -31,7 +32,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/apiService';
 
-// Sous-composant pour la réinitialisation du mot de passe
+// Sous-composant pour la réinitialisation du mot de passe (inchangé)
 const PasswordResetDialog = ({ user, onComplete, onClose }) => {
     const { showNotification } = useApp();
     const [generatedPassword, setGeneratedPassword] = useState('');
@@ -58,11 +59,9 @@ const PasswordResetDialog = ({ user, onComplete, onClose }) => {
         setIsResetting(true);
         setError('');
         try {
-            // 1. Réinitialiser dans AD
             const adResult = await apiService.resetAdUserPassword(user.username, generatedPassword, false);
             if (!adResult.success) throw new Error(`AD: ${adResult.error}`);
 
-            // 2. Mettre à jour dans Excel
             const excelResult = await apiService.saveUserToExcel({
                 user: { ...user, password: generatedPassword, officePassword: user.officePassword || generatedPassword },
                 isEdit: true
@@ -114,26 +113,8 @@ const PasswordResetDialog = ({ user, onComplete, onClose }) => {
 
                 {generatedPassword && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
-                        <Button
-                            variant="contained"
-                            color="secondary"
-                            startIcon={passwordCopied ? <CheckCircleIcon /> : <ContentCopyIcon />}
-                            onClick={async () => {
-                                await navigator.clipboard.writeText(generatedPassword);
-                                setPasswordCopied(true);
-                            }}
-                        >
-                            {passwordCopied ? 'Copié !' : 'Copier'}
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleConfirmReset}
-                            disabled={isResetting}
-                            startIcon={isResetting ? <CircularProgress size={20} /> : <LockResetIcon />}
-                        >
-                            {isResetting ? 'En cours...' : 'Confirmer et Mettre à Jour'}
-                        </Button>
+                        <Button variant="contained" color="secondary" startIcon={passwordCopied ? <CheckCircleIcon /> : <ContentCopyIcon />} onClick={async () => { await navigator.clipboard.writeText(generatedPassword); setPasswordCopied(true); }}>{passwordCopied ? 'Copié !' : 'Copier'}</Button>
+                        <Button variant="contained" color="primary" onClick={handleConfirmReset} disabled={isResetting} startIcon={isResetting ? <CircularProgress size={20} /> : <LockResetIcon />}>{isResetting ? 'En cours...' : 'Confirmer et Mettre à Jour'}</Button>
                     </Box>
                 )}
             </DialogContent>
@@ -151,6 +132,7 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
     const [details, setDetails] = useState(null);
     const [isActionLoading, setIsActionLoading] = useState(false);
     const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+    const [foundGroups, setFoundGroups] = useState([]); // Pour une future recherche de groupe
 
     const loadUserDetails = useCallback(async () => {
         if (!user) return;
@@ -189,13 +171,37 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
 
             if (result.success) {
                 showNotification('success', `Compte ${actionText} avec succès.`);
-                onActionComplete(); // Déclenche le rafraîchissement
-                loadUserDetails(); // Recharge les détails dans le dialogue
+                onActionComplete();
+                loadUserDetails();
             } else {
                 throw new Error(result.error);
             }
         } catch (error) {
             showNotification('error', `Erreur: ${error.message}`);
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleGroupAction = async (groupName, action) => {
+        if (!groupName) return;
+        const actionVerb = action === 'add' ? 'ajouté' : 'retiré';
+        const actionPresent = action === 'add' ? 'ajouter' : 'retirer';
+
+        if (!window.confirm(`Voulez-vous vraiment ${actionPresent} ${user.username} du groupe ${groupName} ?`)) return;
+
+        setIsActionLoading(true);
+        try {
+            const apiCall = action === 'add' ? apiService.addUserToGroup : apiService.removeUserFromGroup;
+            const result = await apiCall(user.username, groupName);
+            if (result.success) {
+                showNotification('success', `Utilisateur ${actionVerb} du groupe ${groupName} avec succès.`);
+                loadUserDetails(); // Recharger les détails pour voir le changement
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            showNotification('error', `Erreur lors de l'action sur le groupe: ${error.message}`);
         } finally {
             setIsActionLoading(false);
         }
@@ -233,7 +239,7 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
                                     color={details.user.enabled ? 'success' : 'error'}
                                     sx={{ mb: 2 }}
                                 />
-                                <Typography variant="body2"><strong>Email :</strong> {details.user.email || 'N/A'}</Typography>
+                                <Typography variant="body2"><strong>Email :</strong> {details.user.email || user.email || 'N/A'}</Typography>
                                 <Typography variant="body2"><strong>Créé le :</strong> {formatDate(details.user.created)}</Typography>
                                 <Typography variant="body2"><strong>Dernière connexion :</strong> {formatDate(details.user.lastLogon)}</Typography>
                                 <Typography variant="body2"><strong>Mot de passe modifié le :</strong> {formatDate(details.user.passwordLastSet)}</Typography>
@@ -244,11 +250,22 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
                                     <GroupIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
                                     Appartenance aux groupes
                                 </Typography>
-                                <Box sx={{ maxHeight: 200, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
+                                <Box sx={{ maxHeight: 150, overflow: 'auto', display: 'flex', flexWrap: 'wrap', gap: 1, p: 1, border: '1px solid #eee', borderRadius: 1 }}>
                                     {details.groups.length > 0 ? details.groups.map(group => (
-                                        <Chip key={group} label={group} size="small" />
+                                        <Chip key={group} label={group} size="small" onDelete={() => handleGroupAction(group, 'remove')} disabled={isActionLoading} />
                                     )) : <Typography variant="body2" color="text.secondary">N'appartient à aucun groupe.</Typography>}
                                 </Box>
+                                <Autocomplete
+                                    sx={{ mt: 2 }}
+                                    freeSolo
+                                    options={foundGroups}
+                                    onChange={(event, newValue) => {
+                                        if (newValue) {
+                                            handleGroupAction(newValue, 'add');
+                                        }
+                                    }}
+                                    renderInput={(params) => <TextField {...params} label="Ajouter à un groupe..." size="small" placeholder="Taper le nom du groupe et Entrée" />}
+                                />
                             </Grid>
                             <Grid item xs={12}>
                                 <Divider sx={{ my: 1 }} />
@@ -286,7 +303,7 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
                     onClose={() => setPasswordDialogOpen(false)}
                     onComplete={() => {
                         setPasswordDialogOpen(false);
-                        onActionComplete(); // Rafraîchit la liste principale
+                        onActionComplete();
                     }}
                 />
             )}

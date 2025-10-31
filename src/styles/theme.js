@@ -5,91 +5,21 @@ import { frFR } from '@mui/material/locale';
 
 // Palette de couleurs moderne et professionnelle
 const colors = {
-    // Couleurs principales
-    primary: {
-        50: '#e3f2fd',
-        100: '#bbdefb',
-        200: '#90caf9',
-        300: '#64b5f6',
-        400: '#42a5f5',
-        500: '#2196f3', // Main
-        600: '#1e88e5',
-        700: '#1976d2',
-        800: '#1565c0',
-        900: '#0d47a1',
-    },
-    secondary: {
-        50: '#f3e5f5',
-        100: '#e1bee7',
-        200: '#ce93d8',
-        300: '#ba68c8',
-        400: '#ab47bc',
-        500: '#9c27b0', // Main
-        600: '#8e24aa',
-        700: '#7b1fa2',
-        800: '#6a1b9a',
-        900: '#4a148c',
-    },
-    // Couleurs de statut
-    success: {
-        light: '#81c784',
-        main: '#4caf50',
-        dark: '#388e3c',
-        contrastText: '#fff',
-    },
-    warning: {
-        light: '#ffb74d',
-        main: '#ff9800',
-        dark: '#f57c00',
-        contrastText: '#000',
-    },
-    error: {
-        light: '#e57373',
-        main: '#f44336',
-        dark: '#d32f2f',
-        contrastText: '#fff',
-    },
-    info: {
-        light: '#64b5f6',
-        main: '#2196f3',
-        dark: '#1976d2',
-        contrastText: '#fff',
-    },
-    // Couleurs de fond
-    background: {
-        default: '#f5f7fa',
-        paper: '#ffffff',
-        dark: '#263238',
-    },
-    // Couleurs de texte
-    text: {
-        primary: '#2c3e50',
-        secondary: '#546e7a',
-        disabled: '#b0bec5',
-        hint: '#78909c',
-    },
-    // Couleurs spécifiques RDS
-    rds: {
-        online: '#4caf50',
-        offline: '#f44336',
-        idle: '#ff9800',
-        active: '#2196f3',
-        disconnected: '#9e9e9e',
-    },
+    primary: { main: '#1e88e5' },
+    secondary: { main: '#8e24aa' },
+    success: { main: '#4caf50', contrastText: '#fff' },
+    warning: { main: '#ff9800', contrastText: '#000' },
+    error: { main: '#f44336', contrastText: '#fff' },
+    info: { main: '#2196f3', contrastText: '#fff' },
+    background: { default: '#f5f7fa', paper: '#ffffff' },
+    text: { primary: '#2c3e50', secondary: '#546e7a' },
 };
 
-// Thème principal
 const theme = createTheme({
     palette: {
         mode: 'light',
-        primary: {
-            ...colors.primary,
-            main: colors.primary[600],
-        },
-        secondary: {
-            ...colors.secondary,
-            main: colors.secondary[600],
-        },
+        primary: colors.primary,
+        secondary: colors.secondary,
         success: colors.success,
         warning: colors.warning,
         error: colors.error,
@@ -109,6 +39,8 @@ const theme = createTheme({
             'Arial',
             'sans-serif',
         ].join(','),
+        // ✅ AMÉLIORATION: Augmentation de la taille de base
+        htmlFontSize: 16.5, // Augmente légèrement la base de rem
         h1: {
             fontSize: '2.5rem',
             fontWeight: 600,
@@ -152,7 +84,7 @@ const theme = createTheme({
             lineHeight: 1.57,
         },
         body1: {
-            fontSize: '1rem',
+            fontSize: '1rem', // Reste 1rem, mais le rem est plus grand
             fontWeight: 400,
             lineHeight: 1.5,
         },
@@ -181,7 +113,7 @@ const theme = createTheme({
     },
 
     shape: {
-        borderRadius: 8, // Coins arrondis modernes
+        borderRadius: 12, // Coins plus modernes
     },
 
     shadows: [
@@ -247,6 +179,13 @@ const theme = createTheme({
                 },
             },
         },
+        MuiTab: {
+            styleOverrides: {
+                root: {
+                    minHeight: 56, // Hauteur des onglets de navigation
+                }
+            }
+        },
         MuiChip: {
             styleOverrides: {
                 root: {
@@ -311,39 +250,6 @@ const theme = createTheme({
             },
         },
     },
+}, frFR);
 
-    // Transitions personnalisées
-    transitions: {
-        duration: {
-            shortest: 150,
-            shorter: 200,
-            short: 250,
-            standard: 300,
-            complex: 375,
-            enteringScreen: 225,
-            leavingScreen: 195,
-        },
-        easing: {
-            easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
-            easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
-            easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
-            sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
-        },
-    },
-
-    // Zindex personnalisés
-    zIndex: {
-        mobileStepper: 1000,
-        fab: 1050,
-        speedDial: 1050,
-        appBar: 1100,
-        drawer: 1200,
-        modal: 1300,
-        snackbar: 1400,
-        tooltip: 1500,
-    },
-}, frFR); // Locale française
-
-// Export du thème et des couleurs
-export { colors };
 export default theme;

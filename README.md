@@ -1,70 +1,63 @@
-# Getting Started with Create React App
+# 🚀 RDS Viewer - Anecoop
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Application web et de bureau pour la gestion centralisée des sessions RDS, du parc informatique, des prêts de matériel et des utilisateurs Active Directory.
 
-## Available Scripts
+## ✨ Fonctionnalités Clés
 
-In the project directory, you can run:
+-   **Tableau de Bord Centralisé :** Vue d'ensemble de l'activité, des prêts en retard et du statut des serveurs.
+-   **Gestion des Sessions RDS :** Visualisation en temps réel des sessions actives/déconnectées, envoi de messages, et actions de contrôle à distance (Shadow, RDP).
+-   **Inventaire Matériel :** Gestion complète du parc d'ordinateurs, avec historique des prêts et des maintenances.
+-   **Gestion des Prêts :** Création, modification, retour, et prolongation des prêts de matériel avec un système de notifications.
+-   **Administration Active Directory :**
+    -   Gestion des membres des groupes de sécurité (VPN, Internet).
+    -   Création d'utilisateurs unifiée (AD + Fichier de suivi Excel).
+    -   Actions rapides sur les comptes (activer, désactiver, réinitialiser le mot de passe).
+-   **Application de Bureau (Electron) :**
+    -   Intégration native avec les outils Windows (MSTSC, PowerShell).
+    -   Système de mise à jour automatique.
 
-### `npm start`
+## 🛠️ Architecture Technique
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+-   **Frontend :** React, Material-UI
+-   **Backend :** Node.js, Express.js
+-   **Base de Données :** SQLite (via `better-sqlite3`) pour les données persistantes (prêts, ordinateurs, etc.) et le cache.
+-   **Source de Données Utilisateurs :** Fichier Excel partagé, synchronisé avec la base de données SQLite.
+-   **Communication Temps Réel :** WebSockets
+-   **Application de Bureau :** Electron, Electron Builder
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## ⚙️ Prérequis
 
-### `npm test`
+-   **Node.js :** Version 20.x (LTS) recommandée.
+-   **Accès Réseau :** L'application nécessite un accès en lecture/écriture au partage réseau où sont stockés `config.json`, la base de données SQLite et le fichier Excel.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 📦 Installation
 
-### `npm run build`
+1.  **Cloner le dépôt :**
+    ```bash
+    git clone <URL_DU_DEPOT>
+    cd rdp
+    ```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+2.  **Installer les dépendances :**
+    ```bash
+    npm install
+    ```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 📝 Configuration
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1.  Naviguez vers le dossier `config/`.
+2.  Copiez `config.template.json` et renommez la copie en `config.json`.
+3.  Ouvrez `config.json` et remplissez **tous** les champs, notamment :
+    -   `databasePath` et `excelFilePath` : Chemins UNC (`\\serveur\partage\fichier`) vers vos fichiers de données.
+    -   `domain`, `username`, `password` : Identifiants d'un compte de service avec les droits nécessaires sur Active Directory.
+    -   `updateUrl` : URL où seront hébergées les mises à jour de l'application Electron.
 
-### `npm run eject`
+## 🚀 Lancement en Développement
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+L'application dispose de deux modes de lancement principaux.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Mode Navigateur Web
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Idéal pour le développement rapide de l'interface.
+```bash
+npm run test:app

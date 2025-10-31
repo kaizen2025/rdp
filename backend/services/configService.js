@@ -3,23 +3,26 @@
 const fs = require('fs');
 const path = require('path');
 
-// Cette variable globale est définie par Electron, mais pas par Node.js.
-// C'est le moyen le plus sûr de détecter l'environnement.
-const isElectron = 'electron' in process.versions;
+// Détecte si on est dans un environnement Electron packagé
+const isPackaged = process.mainModule.filename.includes('app.asar') || process.mainModule.filename.includes('app');
 
-// On importe `electron-is-dev` uniquement si on est dans Electron.
-const isDev = isElectron ? require('electron-is-dev') : process.env.NODE_ENV !== 'production';
-
+/**
+ * Calcule le chemin de base de l'application de manière fiable
+ * dans tous les environnements (dev, prod, forked process).
+ */
 function getBasePath() {
-    if (!isElectron || isDev) {
-        // En développement (Node pur ou Electron dev), la racine du projet.
+    if (isPackaged) {
+        // Dans l'app packagée, les ressources sont à la racine du dossier de l'app
+        // process.resourcesPath est la référence la plus sûre.
+        return process.resourcesPath;
+    } else {
+        // En développement, la base est la racine du projet
         return path.join(__dirname, '..', '..');
     }
-    // En production (EXE), `process.resourcesPath` est le chemin le plus fiable.
-    return process.resourcesPath;
 }
 
 const basePath = getBasePath();
+// Le dossier 'config' est copié à la racine des ressources par electron-builder
 const CONFIG_PATH = path.join(basePath, 'config', 'config.json');
 const TEMPLATE_CONFIG_PATH = path.join(basePath, 'config', 'config.template.json');
 
@@ -50,10 +53,13 @@ function validateConfig(config) {
 async function loadConfigAsync() {
     try {
         console.log(`[Config] Lecture de: ${CONFIG_PATH}`);
+        if (!fs.existsSync(CONFIG_PATH)) {
+            throw new Error(`Le fichier de configuration est introuvable à l'emplacement attendu.`);
+        }
         const data = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
         appConfig = JSON.parse(data);
     } catch (error) {
-        console.error(`⚠️ Impossible de lire config.json. Utilisation du template.`);
+        console.error(`⚠️ ${error.message} Utilisation du template comme solution de repli.`);
         try {
             const templateData = await fs.promises.readFile(TEMPLATE_CONFIG_PATH, 'utf-8');
             appConfig = JSON.parse(templateData);

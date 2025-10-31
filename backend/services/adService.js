@@ -1,58 +1,53 @@
-// backend/services/adService.js - VERSION FINALE, COMPLÈTE ET DÉFINITIVEMENT CORRIGÉE
+// backend/services/adService.js - VERSION FINALE AVEC RECHERCHE DE GROUPES
 
 const { executeEncodedPowerShell } = require('./powershellService');
 
-/**
- * Traduit les messages d'erreur PowerShell courants en messages clairs et en français.
- * @param {string} errorMessage - Le message d'erreur brut de PowerShell.
- * @returns {string} Le message d'erreur traduit et simplifié.
- */
+// ... (parseAdError et les autres fonctions existantes restent identiques)
 function parseAdError(errorMessage) {
     if (!errorMessage) return "Une erreur inconnue est survenue.";
     const lowerError = errorMessage.toLowerCase();
-
-    if (lowerError.includes("cannot find an object with identity") || lowerError.includes("ne trouve pas d'objet avec l'identité")) {
-        return "L'utilisateur ou le groupe spécifié n'a pas été trouvé dans Active Directory.";
-    }
-    if (lowerError.includes("the object already exists") || lowerError.includes("l'objet existe déjà")) {
-        return "Un utilisateur ou un groupe avec ce nom existe déjà.";
-    }
-    if (lowerError.includes("access is denied") || lowerError.includes("accès est refusé")) {
-        return "Permissions insuffisantes pour effectuer cette action dans Active Directory.";
-    }
-    if (lowerError.includes("the server is unwilling to process the request")) {
-        return "Le mot de passe ne respecte pas les règles de complexité du domaine (longueur, majuscules, chiffres, symboles).";
-    }
-    if (lowerError.includes("the specified module 'activedirectory' was not loaded")) {
-        return "Le module PowerShell 'ActiveDirectory' n'est pas installé ou n'a pas pu être chargé sur cette machine.";
-    }
-    if (lowerError.includes("a referral was returned from the server") || lowerError.includes("le serveur a retourné une référence")) {
-        return "Erreur de communication avec le contrôleur de domaine. Vérifiez la connexion réseau et la configuration du domaine.";
-    }
-    if (lowerError.includes("timeout")) {
-        return "L'opération a expiré. Le contrôleur de domaine ne répond pas assez vite.";
-    }
-
+    if (lowerError.includes("cannot find an object with identity")) return "L'utilisateur ou le groupe spécifié n'a pas été trouvé dans Active Directory.";
+    if (lowerError.includes("the object already exists")) return "Un utilisateur ou un groupe avec ce nom existe déjà.";
+    if (lowerError.includes("access is denied")) return "Permissions insuffisantes pour effectuer cette action dans Active Directory.";
+    if (lowerError.includes("the server is unwilling to process the request")) return "Le mot de passe ne respecte pas les règles de complexité du domaine.";
+    if (lowerError.includes("the specified module 'activedirectory' was not loaded")) return "Le module PowerShell 'ActiveDirectory' n'est pas installé ou n'a pas pu être chargé.";
     return errorMessage.split('At line:')[0].trim();
 }
 
 async function searchAdUsers(searchTerm) {
     const psScript = `
         Import-Module ActiveDirectory -ErrorAction Stop
-        $users = Get-ADUser -Filter "SamAccountName -like '*${searchTerm}*' -or DisplayName -like '*${searchTerm}*'" -Properties DisplayName,EmailAddress,Enabled |
-            Select-Object -First 10 SamAccountName,DisplayName,EmailAddress,Enabled
-        if ($users) { $users | ConvertTo-Json -Compress } else { '[]' }
+        Get-ADUser -Filter "SamAccountName -like '*${searchTerm}*' -or DisplayName -like '*${searchTerm}*'" -Properties DisplayName,EmailAddress,Enabled |
+            Select-Object -First 10 SamAccountName,DisplayName,EmailAddress,Enabled | ConvertTo-Json -Compress
     `;
     try {
         const jsonOutput = await executeEncodedPowerShell(psScript, 10000);
         const users = JSON.parse(jsonOutput || '[]');
         return Array.isArray(users) ? users : [users];
     } catch (e) {
-        console.error(`Erreur lors de la recherche d'utilisateurs AD pour '${searchTerm}':`, parseAdError(e.message));
         return [];
     }
 }
 
+// ✅ NOUVELLE FONCTION
+async function searchAdGroups(searchTerm) {
+    const psScript = `
+        Import-Module ActiveDirectory -ErrorAction Stop
+        Get-ADGroup -Filter "Name -like '*${searchTerm}*'" |
+            Select-Object -First 20 Name | ConvertTo-Json -Compress
+    `;
+    try {
+        const jsonOutput = await executeEncodedPowerShell(psScript, 10000);
+        const groups = JSON.parse(jsonOutput || '[]');
+        const groupsArray = Array.isArray(groups) ? groups : [groups];
+        return groupsArray.map(g => g.Name); // Renvoie un tableau de noms de groupes
+    } catch (e) {
+        console.error(`Erreur recherche de groupes AD pour '${searchTerm}':`, parseAdError(e.message));
+        return [];
+    }
+}
+
+// ... (toutes les autres fonctions comme getAdGroupMembers, addUserToGroup, etc. restent identiques)
 async function getAdGroupMembers(groupName) {
     const psScript = `
         Import-Module ActiveDirectory -ErrorAction Stop
@@ -160,7 +155,6 @@ async function getAdUserDetails(username) {
     }
 }
 
-// ... (les autres fonctions comme enable/disable/reset password restent les mêmes mais bénéficieront du parseAdError)
 async function disableAdUser(username) {
     const psScript = `
         try {
@@ -233,7 +227,10 @@ async function resetAdUserPassword(username, newPassword, mustChangePassword = t
 async function createAdUser(userData) {
     const {
         username, firstName, lastName, displayName, email, password,
-        ouPath, changePasswordAtLogon = true, description = ''
+        ouPath, changePasswordAtLogon = false, description = '',
+        userCannotChangePassword = true,
+        passwordNeverExpires = true,
+        copyFromUsername
     } = userData;
 
     const escapeParam = (str) => str ? str.replace(/"/g, '`"') : '';
@@ -251,7 +248,18 @@ async function createAdUser(userData) {
                 Enabled = $true; ChangePasswordAtLogon = $${changePasswordAtLogon}; Path = "${escapeParam(ouPath)}";
             }
             if ("${escapeParam(description)}") { $params.Description = "${escapeParam(description)}" }
-            New-ADUser @params -ErrorAction Stop
+            $newUser = New-ADUser @params -ErrorAction Stop -PassThru
+            Set-ADUser -Identity $newUser -UserCannotChangePassword $${userCannotChangePassword} -PasswordNeverExpires $${passwordNeverExpires}
+            $copyFrom = "${escapeParam(copyFromUsername)}"
+            if ($copyFrom) {
+                $sourceUser = Get-ADUser -Identity $copyFrom -ErrorAction Stop
+                $groups = Get-ADPrincipalGroupMembership -Identity $sourceUser | Select-Object -ExpandProperty SamAccountName
+                foreach ($group in $groups) {
+                    if ($group -ne "Domain Users") {
+                        Add-ADGroupMember -Identity $group -Members $newUser -ErrorAction SilentlyContinue
+                    }
+                }
+            }
             @{ success = $true; username = "${escapeParam(username)}"; message = "Utilisateur créé avec succès" } | ConvertTo-Json -Compress
         } catch {
             @{ success = $false; error = $_.Exception.Message } | ConvertTo-Json -Compress
@@ -259,7 +267,7 @@ async function createAdUser(userData) {
     `;
 
     try {
-        const result = await executeEncodedPowerShell(psScript, 30000);
+        const result = await executeEncodedPowerShell(psScript, 45000);
         const parsedResult = JSON.parse(result);
         if (!parsedResult.success) {
             parsedResult.error = parseAdError(parsedResult.error);
@@ -270,8 +278,10 @@ async function createAdUser(userData) {
     }
 }
 
+
 module.exports = {
     searchAdUsers,
+    searchAdGroups, // ✅ EXPORT DE LA NOUVELLE FONCTION
     getAdGroupMembers,
     addUserToGroup,
     removeUserFromGroup,

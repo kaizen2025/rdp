@@ -1,4 +1,4 @@
-// src/pages/LoansCalendar.js - CORRIGÉ
+// src/pages/LoansCalendar.js - VERSION AMÉLIORÉE
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -166,11 +166,27 @@ const LoansCalendar = () => {
                         const dayLoans = getLoansForDay(dayInfo.date);
                         const isTodayDate = isToday(dayInfo.date);
                         return (
-                            <Box key={index} onClick={() => handleDayClick(dayInfo)} sx={{ minHeight: 100, p: 1, border: 1, borderColor: isTodayDate ? 'primary.main' : 'divider', borderWidth: isTodayDate ? 2 : 1, borderRadius: 1, bgcolor: dayInfo.isCurrentMonth ? 'background.paper' : 'action.hover', cursor: dayLoans.length > 0 ? 'pointer' : 'default', '&:hover': dayLoans.length > 0 ? { bgcolor: 'action.hover', boxShadow: 1 } : {} }}>
+                            <Box key={index} onClick={() => handleDayClick(dayInfo)} sx={{ minHeight: 120, p: 1, border: 1, borderColor: isTodayDate ? 'primary.main' : 'divider', borderWidth: isTodayDate ? 2 : 1, borderRadius: 1, bgcolor: dayInfo.isCurrentMonth ? 'background.paper' : 'action.hover', cursor: dayLoans.length > 0 ? 'pointer' : 'default', '&:hover': dayLoans.length > 0 ? { bgcolor: 'action.hover', boxShadow: 1 } : {} }}>
                                 <Typography variant="body2" sx={{ fontWeight: isTodayDate ? 'bold' : 'normal', color: dayInfo.isCurrentMonth ? 'text.primary' : 'text.disabled' }}>{dayInfo.day}</Typography>
                                 <Box sx={{ mt: 0.5 }}>
-                                    {dayLoans.slice(0, 3).map((loan) => (<Tooltip key={loan.id} title={`${loan.computerName} - ${loan.userDisplayName}`}><Box sx={{ fontSize: '0.7rem', bgcolor: STATUS_COLORS[loan.status]?.bg || '#grey', color: STATUS_COLORS[loan.status]?.text || 'white', borderRadius: 0.5, px: 0.5, py: 0.25, mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loan.computerName}</Box></Tooltip>))}
-                                    {dayLoans.length > 3 && (<Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 'bold' }}>+{dayLoans.length - 3} autre(s)</Typography>)}
+                                    {dayLoans.slice(0, 2).map((loan) => (
+                                        <Tooltip key={loan.id} title={`${loan.computerName} - ${loan.userDisplayName}`}>
+                                            <Box sx={{ 
+                                                fontSize: '0.7rem', 
+                                                bgcolor: STATUS_COLORS[loan.status]?.bg || '#grey', 
+                                                color: STATUS_COLORS[loan.status]?.text || 'white', 
+                                                borderRadius: 1, px: 0.5, py: 0.25, mb: 0.5, 
+                                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' 
+                                            }}>
+                                                <Typography variant="caption" sx={{ fontWeight: 500 }}>{loan.computerName}</Typography>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                    <PersonIcon sx={{ fontSize: 12 }} />
+                                                    <Typography variant="caption">{loan.userDisplayName}</Typography>
+                                                </Box>
+                                            </Box>
+                                        </Tooltip>
+                                    ))}
+                                    {dayLoans.length > 2 && (<Typography variant="caption" sx={{ fontSize: '0.65rem', color: 'text.secondary', fontWeight: 'bold' }}>+{dayLoans.length - 2} autre(s)</Typography>)}
                                 </Box>
                             </Box>
                         );

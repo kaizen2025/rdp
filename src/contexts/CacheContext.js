@@ -8,8 +8,11 @@ const CacheContext = createContext();
 
 export const useCache = () => useContext(CacheContext);
 
-// Liste des entités à mettre en cache et à gérer
-const ENTITIES = ['loans', 'computers', 'excel_users', 'technicians', 'rds_sessions', 'config'];
+// ✅ AJOUT: 'ad_groups:VPN' et 'ad_groups:Sortants_responsables'
+const ENTITIES = [
+    'loans', 'computers', 'excel_users', 'technicians', 'rds_sessions', 'config',
+    'ad_groups:VPN', 'ad_groups:Sortants_responsables'
+];
 
 export const CacheProvider = ({ children }) => {
     const { events, showNotification } = useApp();
@@ -20,14 +23,20 @@ export const CacheProvider = ({ children }) => {
     const fetchDataForEntity = useCallback(async (entity) => {
         try {
             let data;
-            switch (entity) {
-                case 'loans': data = await apiService.getLoans(); break;
-                case 'computers': data = await apiService.getComputers(); break;
-                case 'excel_users': data = (await apiService.getExcelUsers())?.users || {}; break;
-                case 'technicians': data = await apiService.getConnectedTechnicians(); break;
-                case 'rds_sessions': data = await apiService.getRdsSessions(); break;
-                case 'config': data = await apiService.getConfig(); break;
-                default: return;
+            // ✅ AJOUT: Logique pour charger les groupes AD
+            if (entity.startsWith('ad_groups:')) {
+                const groupName = entity.split(':')[1];
+                data = await apiService.getAdGroupMembers(groupName);
+            } else {
+                switch (entity) {
+                    case 'loans': data = await apiService.getLoans(); break;
+                    case 'computers': data = await apiService.getComputers(); break;
+                    case 'excel_users': data = (await apiService.getExcelUsers())?.users || {}; break;
+                    case 'technicians': data = await apiService.getConnectedTechnicians(); break;
+                    case 'rds_sessions': data = await apiService.getRdsSessions(); break;
+                    case 'config': data = await apiService.getConfig(); break;
+                    default: return;
+                }
             }
             setCache(prev => ({ ...prev, [entity]: data }));
             return data;
@@ -38,6 +47,7 @@ export const CacheProvider = ({ children }) => {
         }
     }, [showNotification]);
 
+    // ... (le reste du fichier est identique)
     // Chargement initial de toutes les données
     useEffect(() => {
         const initialLoad = async () => {
@@ -51,9 +61,12 @@ export const CacheProvider = ({ children }) => {
     // Écoute des événements WebSocket pour les mises à jour
     useEffect(() => {
         const handleDataUpdate = (payload) => {
-            if (payload && payload.entity && ENTITIES.includes(payload.entity)) {
-                console.log(`[CacheContext] Mise à jour reçue pour: ${payload.entity}`);
-                fetchDataForEntity(payload.entity);
+            if (payload && payload.entity) {
+                const entityToUpdate = payload.group ? `${payload.entity}:${payload.group}` : payload.entity;
+                if (ENTITIES.includes(entityToUpdate)) {
+                    console.log(`[CacheContext] Mise à jour reçue pour: ${entityToUpdate}`);
+                    fetchDataForEntity(entityToUpdate);
+                }
             }
         };
         

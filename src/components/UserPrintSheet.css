@@ -1,4 +1,4 @@
-/* src/components/UserPrintSheet.css - Styles optimisés pour l'impression PDF */
+/* src/components/UserPrintSheet.css - Styles optimisés pour l'impression PDF sur demi-page */
 
 /* 
   ======================================
@@ -21,7 +21,7 @@
 @media print {
     @page {
         size: A4 portrait;
-        margin: 10mm; /* Marges réduites pour plus d'espace */
+        margin: 5mm; /* Marges encore plus réduites pour maximiser l'espace sur demi-page */
     }
     
     body, html {
@@ -48,11 +48,12 @@
         margin: 0 !important;
         border: none !important;
         box-shadow: none !important;
-        font-size: 9pt !important; /* Taille de police optimisée pour l'impression */
-        line-height: 1.3 !important;
+        font-size: 8pt !important; /* Taille de police réduite pour compacter */
+        line-height: 1.2 !important;
         page-break-after: always !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
+        max-height: 148mm !important; /* Limite à une demi-page A4 (environ 148mm) */
     }
     
     .no-print,
@@ -72,7 +73,7 @@
     
     .confidential-info {
         background-color: #ffebee !important;
-        border: 2px solid #f44336 !important;
+        border: 1px solid #f44336 !important; /* Bordure plus fine */
     }
     
     /* AFFICHER LES MOTS DE PASSE À L'IMPRESSION */
@@ -81,7 +82,6 @@
         font-weight: bold !important;
         background-color: #ffcdd2 !important;
         border: 1px dashed #f44336 !important;
-        /* La valeur est déjà visible, pas besoin de forcer l'affichage ici */
     }
     
     .support-section {
@@ -91,8 +91,8 @@
 
     .print-footer {
         border-top: 1px solid #ccc !important;
-        padding-top: 8pt !important;
-        margin-top: 16pt !important;
+        padding-top: 4pt !important; /* Réduit */
+        margin-top: 8pt !important; /* Réduit */
         page-break-before: auto;
     }
 

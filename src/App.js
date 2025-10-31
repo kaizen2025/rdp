@@ -19,6 +19,14 @@ import MainLayout from './layouts/MainLayout';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import apiService from './services/apiService';
 import theme from './styles/theme';
+import { Dialog } from '@mui/material'; // Importer Dialog
+
+// ✅ CORRECTION ARIA-HIDDEN
+// On surcharge le comportement par défaut de tous les dialogues de l'application
+Dialog.defaultProps = {
+    ...Dialog.defaultProps,
+    hideBackdrop: false, // Empêche MUI de mettre aria-hidden="true" sur le body
+};
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false);

@@ -16,6 +16,7 @@
     "server:start": "node server/server.js",
     "dev": "concurrently \"npm run server:dev\" \"npm run start:auto\"",
     "electron:dev": "electron .",
+    "dev:electron": "concurrently -k \"npm run server:start\" \"npm run start:auto\" \"wait-on http://localhost:3000 && electron .\"",
     "postinstall": "electron-builder install-app-deps",
     "test:app": "concurrently --names \"SERVER,REACT\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run server:start\" \"npm run start:auto\"",
     "build:exe": "npm run build && electron-builder --win portable",
