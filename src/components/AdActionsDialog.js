@@ -31,6 +31,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/apiService';
+import adGroupCache from '../utils/adGroupCache';
 
 // Sous-composant pour la réinitialisation du mot de passe (inchangé)
 const PasswordResetDialog = ({ user, onComplete, onClose }) => {
@@ -210,15 +211,27 @@ const AdActionsDialog = ({ open, onClose, user, onActionComplete }) => {
         }
     };
 
-    // ✅ NOUVELLE FONCTION: Recherche de groupes AD avec debounce
+    // ✅ FONCTION AMÉLIORÉE: Recherche de groupes AD avec cache
     const searchAdGroups = useCallback(async (searchTerm) => {
         if (!searchTerm || searchTerm.length < 2) {
-            setFoundGroups([]);
+            // Afficher les groupes populaires si pas de recherche
+            const popular = adGroupCache.getPopularGroups(8);
+            setFoundGroups(popular);
             return;
         }
+
+        // Vérifier le cache d'abord
+        const cached = adGroupCache.get(searchTerm);
+        if (cached) {
+            setFoundGroups(cached);
+            return;
+        }
+
         setIsSearchingGroups(true);
         try {
             const groups = await apiService.searchAdGroups(searchTerm);
+            // Stocker dans le cache
+            adGroupCache.set(searchTerm, groups || []);
             setFoundGroups(groups || []);
         } catch (error) {
             console.error('Erreur recherche de groupes:', error);
