@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-import { Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress, FormControl, InputLabel, Select, MenuItem, Chip, Grid, Checkbox } from '@mui/material';
-import { PersonAdd as PersonAddIcon, Refresh as RefreshIcon, Clear as ClearIcon, Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon, VpnKey as VpnKeyIcon, Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon, Dns as DnsIcon, Login as LoginIcon, Circle as CircleIcon } from '@mui/icons-material';
+import { Box, Paper, Typography, Button, IconButton, Tooltip, CircularProgress, FormControl, InputLabel, Select, MenuItem, Chip, Grid, Checkbox, Dialog } from '@mui/material';
+import { PersonAdd as PersonAddIcon, Refresh as RefreshIcon, Clear as ClearIcon, Edit as EditIcon, Delete as DeleteIcon, Print as PrintIcon, VpnKey as VpnKeyIcon, Language as LanguageIcon, Settings as SettingsIcon, Person as PersonIcon, Dns as DnsIcon, Login as LoginIcon, Circle as CircleIcon, Upload as UploadIcon } from '@mui/icons-material';
 
 import { useApp } from '../contexts/AppContext';
 import { useCache } from '../contexts/CacheContext';
@@ -13,6 +13,7 @@ import UserDialog from '../components/UserDialog';
 import PrintPreviewDialog from '../components/PrintPreviewDialog';
 import AdActionsDialog from '../components/AdActionsDialog';
 import CreateAdUserDialog from '../components/CreateAdUserDialog';
+import BulkUserImport from '../components/user-management/BulkUserImport';
 import PasswordCompact from '../components/PasswordCompact';
 import CopyableText from '../components/CopyableText';
 import PageHeader from '../components/common/PageHeader';
@@ -217,6 +218,14 @@ const UsersManagementPage = () => {
                 ]}
                 actions={
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <Button
+                            variant="outlined"
+                            startIcon={<UploadIcon />}
+                            onClick={() => setDialog({ type: 'bulkImport' })}
+                            sx={{ borderRadius: 2 }}
+                        >
+                            Import Massif
+                        </Button>
                         <ExportButton
                             data={filteredUsers}
                             columns={EXPORT_COLUMNS.users}
@@ -281,6 +290,21 @@ const UsersManagementPage = () => {
             {dialog.type === 'print' && <PrintPreviewDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} />}
             {dialog.type === 'adActions' && <AdActionsDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} onActionComplete={handleRefresh} />}
             {dialog.type === 'createAd' && <CreateAdUserDialog open={true} onClose={() => setDialog({ type: null })} onSuccess={handleRefresh} servers={servers} />}
+            {dialog.type === 'bulkImport' && (
+                <Dialog open={true} onClose={() => setDialog({ type: null })} maxWidth="md" fullWidth>
+                    <BulkUserImport
+                        existingUsers={users}
+                        onImport={async (userData) => {
+                            await apiService.saveUserToExcel({ user: userData, isEdit: false });
+                            await invalidate('excel_users');
+                        }}
+                        onClose={() => {
+                            setDialog({ type: null });
+                            handleRefresh();
+                        }}
+                    />
+                </Dialog>
+            )}
 
             <ConfirmDialogComponent />
         </Box>

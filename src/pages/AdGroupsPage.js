@@ -24,6 +24,7 @@ import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
 import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import AdTreeView from '../components/ad-tree/AdTreeView';
 
 const MemberRow = memo(({ member, style, isOdd, onRemove, groupName }) => (
     <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, backgroundColor: isOdd ? 'grey.50' : 'white', borderBottom: '1px solid', borderColor: 'divider', '&:hover': { backgroundColor: 'action.hover' } }}>
@@ -36,11 +37,11 @@ const AdGroupsPage = () => {
     const { showNotification } = useApp();
     const { cache, isLoading: isCacheLoading, invalidate } = useCache();
     const { showConfirm, ConfirmDialogComponent } = useConfirmDialog();
-    
+
     const config = useMemo(() => cache.config || {}, [cache.config]);
     const adGroups = useMemo(() => config?.ad_groups || {}, [config]);
     const groupKeys = useMemo(() => Object.keys(adGroups), [adGroups]);
-    
+
     const [selectedGroup, setSelectedGroup] = useState(groupKeys.length > 0 ? groupKeys[0] : '');
     const [searchTerm, setSearchTerm] = useState('');
     const [addUserDialogOpen, setAddUserDialogOpen] = useState(false);
@@ -48,6 +49,7 @@ const AdGroupsPage = () => {
     const [searchingUsers, setSearchingUsers] = useState(false);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [showAdTree, setShowAdTree] = useState(false);
 
     const members = useMemo(() => cache[`ad_groups:${selectedGroup}`] || [], [cache, selectedGroup]);
 
@@ -147,6 +149,30 @@ const AdGroupsPage = () => {
                 </DialogContent>
                 <DialogActions><Button onClick={() => setAddUserDialogOpen(false)}>Fermer</Button></DialogActions>
             </Dialog>
+
+            {/* Arborescence AD */}
+            <Box sx={{ mt: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" fontWeight={600}>
+                        Arborescence Active Directory
+                    </Typography>
+                    <Button
+                        variant={showAdTree ? 'contained' : 'outlined'}
+                        onClick={() => setShowAdTree(!showAdTree)}
+                    >
+                        {showAdTree ? 'Masquer' : 'Afficher'} l'arborescence
+                    </Button>
+                </Box>
+
+                {showAdTree && (
+                    <AdTreeView
+                        onNodeSelect={(node) => {
+                            console.log('Node selected:', node);
+                            showNotification('info', `Sélectionné: ${node.name}`);
+                        }}
+                    />
+                )}
+            </Box>
 
             <ConfirmDialogComponent />
         </Box>

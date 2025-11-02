@@ -25,6 +25,9 @@ import PageHeader from '../components/common/PageHeader';
 import StatCard from '../components/common/StatCard';
 import LoadingScreen from '../components/common/LoadingScreen';
 import LoanStatisticsCharts from '../components/statistics/LoanStatisticsCharts';
+import DashboardWidgets from '../components/dashboard/DashboardWidgets';
+import ActivityHeatmap from '../components/dashboard/ActivityHeatmap';
+import TopUsersWidget from '../components/dashboard/TopUsersWidget';
 
 const ServerStatusWidget = memo(() => {
     const { cache } = useCache();
@@ -159,6 +162,7 @@ const RecentActivityWidget = memo(() => {
 const DashboardPage = () => {
     const navigate = useNavigate();
     const { cache, isLoading } = useCache();
+    const [widgets, setWidgets] = useState([]);
 
     const { loans = [], computers = [], loan_history = [] } = cache;
 
@@ -206,6 +210,40 @@ const DashboardPage = () => {
 
         return { activeLoans: active, overdueLoans: overdue, stats: statistics, loanStatistics: loanStats };
     }, [loans, computers, loan_history]);
+
+    // Configuration des widgets personnalisables
+    const customWidgets = useMemo(() => [
+        {
+            id: 'activity-heatmap',
+            title: "Carte d'Activité",
+            w: 12,
+            h: 4,
+            content: <ActivityHeatmap data={loan_history} />
+        },
+        {
+            id: 'top-users',
+            title: 'Top Utilisateurs',
+            w: 6,
+            h: 5,
+            content: <TopUsersWidget data={loan_history} />
+        },
+        {
+            id: 'statistics',
+            title: 'Statistiques des Prêts',
+            w: 6,
+            h: 5,
+            content: <LoanStatisticsCharts statistics={loanStatistics} loans={loans} />
+        }
+    ], [loan_history, loanStatistics, loans]);
+
+    const handleWidgetRemove = useCallback((widgetId) => {
+        setWidgets(prev => prev.filter(w => w.id !== widgetId));
+    }, []);
+
+    const handleWidgetRefresh = useCallback((widgetId) => {
+        console.log('Refresh widget:', widgetId);
+        // TODO: Implement refresh logic per widget
+    }, []);
 
     if (isLoading) {
         return <LoadingScreen type="dashboard" />;
@@ -274,9 +312,16 @@ const DashboardPage = () => {
                     </Paper>
                 </Grid>
 
-                {/* Statistics Charts Section */}
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                    <LoanStatisticsCharts statistics={loanStatistics} loans={loans} />
+                {/* Widgets personnalisables avec drag & drop */}
+                <Grid item xs={12} sx={{ mt: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+                        Widgets Personnalisables
+                    </Typography>
+                    <DashboardWidgets
+                        widgets={customWidgets}
+                        onWidgetRemove={handleWidgetRemove}
+                        onWidgetRefresh={handleWidgetRefresh}
+                    />
                 </Grid>
             </Grid>
         </Box>
