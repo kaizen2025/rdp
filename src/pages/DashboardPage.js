@@ -24,6 +24,7 @@ import apiService from '../services/apiService';
 import PageHeader from '../components/common/PageHeader';
 import StatCard from '../components/common/StatCard';
 import LoadingScreen from '../components/common/LoadingScreen';
+import LoanStatisticsCharts from '../components/statistics/LoanStatisticsCharts';
 
 const ServerStatusWidget = memo(() => {
     const { cache } = useCache();
@@ -161,7 +162,7 @@ const DashboardPage = () => {
 
     const { loans = [], computers = [], loan_history = [] } = cache;
 
-    const { activeLoans, overdueLoans, stats } = useMemo(() => {
+    const { activeLoans, overdueLoans, stats, loanStatistics } = useMemo(() => {
         const active = loans.filter(l => l.status === 'active');
         const overdue = loans.filter(l => l.status === 'overdue' || l.status === 'critical');
         const statistics = {
@@ -179,7 +180,31 @@ const DashboardPage = () => {
                 totalLoans: loan_history.filter(h => h.eventType === 'created').length,
             }
         };
-        return { activeLoans: active, overdueLoans: overdue, stats: statistics };
+
+        // Calculate average loan duration
+        const calculateAverageDuration = () => {
+            const completedLoans = loans.filter(l => l.actualReturnDate);
+            if (completedLoans.length === 0) return 0;
+            const totalDays = completedLoans.reduce((sum, loan) => {
+                const start = new Date(loan.loanDate);
+                const end = new Date(loan.actualReturnDate);
+                const days = Math.floor((end - start) / (1000 * 60 * 60 * 24));
+                return sum + days;
+            }, 0);
+            return totalDays / completedLoans.length;
+        };
+
+        // Statistics for LoanStatisticsCharts component
+        const loanStats = {
+            totalLoans: loans.length,
+            activeLoans: active.length,
+            overdueLoans: overdue.filter(l => l.status === 'overdue').length,
+            criticalLoans: overdue.filter(l => l.status === 'critical').length,
+            returnedLoans: loans.filter(l => l.status === 'returned').length,
+            averageLoanDuration: calculateAverageDuration()
+        };
+
+        return { activeLoans: active, overdueLoans: overdue, stats: statistics, loanStatistics: loanStats };
     }, [loans, computers, loan_history]);
 
     if (isLoading) {
@@ -247,6 +272,11 @@ const DashboardPage = () => {
                             )) : <Typography variant="caption" color="text.secondary" sx={{ py: 2, textAlign: 'center', display: 'block' }}>Aucun prêt actif</Typography>}
                         </List>
                     </Paper>
+                </Grid>
+
+                {/* Statistics Charts Section */}
+                <Grid item xs={12} sx={{ mt: 2 }}>
+                    <LoanStatisticsCharts statistics={loanStatistics} loans={loans} />
                 </Grid>
             </Grid>
         </Box>

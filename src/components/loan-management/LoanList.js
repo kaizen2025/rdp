@@ -17,10 +17,13 @@ import apiService from '../../services/apiService';
 import SearchInput from '../common/SearchInput';
 import EmptyState from '../common/EmptyState';
 import LoadingScreen from '../common/LoadingScreen';
+import ExportButton from '../common/ExportButton';
+import { useConfirmDialog } from '../common/ConfirmDialog';
 import LoanDialog from '../LoanDialog';
 import ReturnLoanDialog from '../ReturnLoanDialog';
 import ExtendLoanDialog from '../ExtendLoanDialog';
 import LoanHistoryDialog from '../LoanHistoryDialog';
+import { EXPORT_COLUMNS } from '../../utils/exportUtils';
 
 const STATUS_CONFIG = {
     active: { label: 'Actif', color: 'success' },
@@ -34,6 +37,7 @@ const STATUS_CONFIG = {
 const LoanList = ({ preFilter }) => {
     const { showNotification } = useApp();
     const { cache, isLoading, invalidate } = useCache();
+    const { showConfirm, ConfirmDialogComponent } = useConfirmDialog();
 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState(preFilter || 'active_ongoing');
@@ -103,10 +107,18 @@ const LoanList = ({ preFilter }) => {
     };
 
     const handleCancelLoan = async (loan) => {
-        const reason = prompt('Raison de l\'annulation:');
-        if (reason) {
+        const confirmed = await showConfirm({
+            title: 'Annuler le prêt',
+            message: `Voulez-vous vraiment annuler le prêt de ${loan.computerName} à ${loan.userDisplayName} ?`,
+            details: 'L\'ordinateur sera marqué comme disponible. Cette action sera enregistrée dans l\'historique.',
+            severity: 'warning',
+            confirmText: 'Annuler le prêt',
+            cancelText: 'Garder le prêt'
+        });
+
+        if (confirmed) {
             try {
-                await apiService.cancelLoan(loan.id, reason);
+                await apiService.cancelLoan(loan.id, 'Annulé par le technicien');
                 showNotification('success', 'Prêt annulé.');
                 await Promise.all([invalidate('loans'), invalidate('computers')]);
             } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
@@ -142,6 +154,20 @@ const LoanList = ({ preFilter }) => {
                         <Button fullWidth startIcon={<FilterListOffIcon />} onClick={() => { setSearchTerm(''); setStatusFilter('active_ongoing'); }}>
                             Effacer
                         </Button>
+                    </Grid>
+                    <Grid item xs={12} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <ExportButton
+                            data={filteredLoans}
+                            columns={EXPORT_COLUMNS.loans}
+                            title="Prêts d'Ordinateurs - Anecoop"
+                            baseName="prets"
+                            variant="contained"
+                            onExportComplete={(format, success) => {
+                                if (success) {
+                                    showNotification('success', `Export ${format.toUpperCase()} réussi ! (${filteredLoans.length} prêts)`);
+                                }
+                            }}
+                        />
                     </Grid>
                 </Grid>
             </Paper>
@@ -190,6 +216,8 @@ const LoanList = ({ preFilter }) => {
             {dialog.type === 'return' && <ReturnLoanDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} onReturn={handleReturnLoan} />}
             {dialog.type === 'extend' && <ExtendLoanDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} onExtend={handleExtendLoan} />}
             {dialog.type === 'history' && <LoanHistoryDialog open={true} onClose={() => setDialog({ type: null, data: null })} loan={dialog.data} />}
+
+            <ConfirmDialogComponent />
         </Box>
     );
 };

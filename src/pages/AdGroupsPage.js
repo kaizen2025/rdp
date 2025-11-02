@@ -23,6 +23,7 @@ import PageHeader from '../components/common/PageHeader';
 import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
+import { useConfirmDialog } from '../components/common/ConfirmDialog';
 
 const MemberRow = memo(({ member, style, isOdd, onRemove, groupName }) => (
     <Box style={style} sx={{ display: 'flex', alignItems: 'center', px: 2, backgroundColor: isOdd ? 'grey.50' : 'white', borderBottom: '1px solid', borderColor: 'divider', '&:hover': { backgroundColor: 'action.hover' } }}>
@@ -34,6 +35,7 @@ const MemberRow = memo(({ member, style, isOdd, onRemove, groupName }) => (
 const AdGroupsPage = () => {
     const { showNotification } = useApp();
     const { cache, isLoading: isCacheLoading, invalidate } = useCache();
+    const { showConfirm, ConfirmDialogComponent } = useConfirmDialog();
     
     const config = useMemo(() => cache.config || {}, [cache.config]);
     const adGroups = useMemo(() => config?.ad_groups || {}, [config]);
@@ -69,7 +71,17 @@ const AdGroupsPage = () => {
     }, [members, searchTerm]);
 
     const handleRemoveUser = async (username, groupName) => {
-        if (!window.confirm(`Retirer ${username} du groupe ${groupName} ?`)) return;
+        const confirmed = await showConfirm({
+            title: 'Retirer du groupe',
+            message: `Voulez-vous vraiment retirer ${username} du groupe ${groupName} ?`,
+            details: 'Cette action retirera les permissions associées au groupe pour cet utilisateur.',
+            severity: 'warning',
+            confirmText: 'Retirer',
+            cancelText: 'Annuler'
+        });
+
+        if (!confirmed) return;
+
         try {
             await apiService.removeUserFromGroup(username, groupName);
             showNotification('success', `${username} retiré du groupe.`);
@@ -135,6 +147,8 @@ const AdGroupsPage = () => {
                 </DialogContent>
                 <DialogActions><Button onClick={() => setAddUserDialogOpen(false)}>Fermer</Button></DialogActions>
             </Dialog>
+
+            <ConfirmDialogComponent />
         </Box>
     );
 };

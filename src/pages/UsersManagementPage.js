@@ -19,6 +19,9 @@ import PageHeader from '../components/common/PageHeader';
 import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
+import ExportButton from '../components/common/ExportButton';
+import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import { EXPORT_COLUMNS } from '../utils/exportUtils';
 
 const AdGroupBadge = memo(({ groupName, isMember, onToggle, isLoading }) => {
     const isVpn = groupName === 'VPN';
@@ -77,6 +80,8 @@ const UserRow = memo(({ user, style, isOdd, onEdit, onDelete, onConnectWithCrede
 const UsersManagementPage = () => {
     const { showNotification } = useApp();
     const { cache, isLoading: isCacheLoading, invalidate } = useCache();
+    const { showConfirm, ConfirmDialogComponent } = useConfirmDialog();
+
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [serverFilter, setServerFilter] = useState('all');
@@ -129,13 +134,23 @@ const UsersManagementPage = () => {
     };
 
     const handleDeleteUser = useCallback(async (user) => {
-        if (!window.confirm(`Supprimer ${user.displayName} du fichier Excel ?`)) return;
+        const confirmed = await showConfirm({
+            title: 'Supprimer l\'utilisateur',
+            message: `Voulez-vous vraiment supprimer ${user.displayName} du fichier Excel ?`,
+            details: `Identifiant: ${user.username} - Service: ${user.department || 'N/A'}`,
+            severity: 'danger',
+            confirmText: 'Supprimer',
+            cancelText: 'Annuler'
+        });
+
+        if (!confirmed) return;
+
         try {
             await apiService.deleteUserFromExcel(user.username);
             showNotification('success', 'Utilisateur supprimé.');
             await invalidate('excel_users');
         } catch (error) { showNotification('error', `Erreur: ${error.message}`); }
-    }, [invalidate, showNotification]);
+    }, [invalidate, showNotification, showConfirm]);
 
     const handleConnectUserWithCredentials = useCallback(async (user) => {
         if (!window.electronAPI?.launchRdp) return showNotification('warning', 'Fonctionnalité disponible uniquement dans l\'application de bureau.');
@@ -202,10 +217,21 @@ const UsersManagementPage = () => {
                 ]}
                 actions={
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <ExportButton
+                            data={filteredUsers}
+                            columns={EXPORT_COLUMNS.users}
+                            title="Utilisateurs RDS - Anecoop"
+                            baseName="utilisateurs_rds"
+                            onExportComplete={(format, success) => {
+                                if (success) {
+                                    showNotification('success', `Export ${format.toUpperCase()} réussi ! (${filteredUsers.length} utilisateurs)`);
+                                }
+                            }}
+                        />
                         {selectedUsernames.size > 0 && (
-                            <Button 
-                                variant="outlined" 
-                                startIcon={<PrintIcon />} 
+                            <Button
+                                variant="outlined"
+                                startIcon={<PrintIcon />}
                                 onClick={() => setDialog({ type: 'print', data: users.filter(u => selectedUsernames.has(u.username)) })}
                             >
                                 Imprimer ({selectedUsernames.size})
@@ -255,6 +281,8 @@ const UsersManagementPage = () => {
             {dialog.type === 'print' && <PrintPreviewDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} />}
             {dialog.type === 'adActions' && <AdActionsDialog open={true} onClose={() => setDialog({ type: null })} user={dialog.data} onActionComplete={handleRefresh} />}
             {dialog.type === 'createAd' && <CreateAdUserDialog open={true} onClose={() => setDialog({ type: null })} onSuccess={handleRefresh} servers={servers} />}
+
+            <ConfirmDialogComponent />
         </Box>
     );
 };

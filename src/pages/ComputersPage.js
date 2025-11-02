@@ -33,6 +33,9 @@ import PageHeader from '../components/common/PageHeader';
 import SearchInput from '../components/common/SearchInput';
 import EmptyState from '../components/common/EmptyState';
 import LoadingScreen from '../components/common/LoadingScreen';
+import ExportButton from '../components/common/ExportButton';
+import { useConfirmDialog } from '../components/common/ConfirmDialog';
+import { EXPORT_COLUMNS } from '../utils/exportUtils';
 
 
 const STATUS_CONFIG = {
@@ -165,7 +168,8 @@ const QuickLoanDialog = ({ open, onClose, computer, users, onSave }) => {
 const ComputersPage = () => {
     const { showNotification } = useApp();
     const { cache, invalidate, isLoading } = useCache();
-    
+    const { showConfirm, ConfirmDialogComponent } = useConfirmDialog();
+
     const [view, setView] = useState('grid'); // 'grid', 'list', 'table'
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -208,7 +212,16 @@ const ComputersPage = () => {
     };
 
     const handleDeleteComputer = async (computer) => {
-        if (!window.confirm(`Supprimer ${computer.name} ?`)) return;
+        const confirmed = await showConfirm({
+            title: 'Supprimer l\'ordinateur',
+            message: `Voulez-vous vraiment supprimer ${computer.name} ?`,
+            details: `Modèle: ${computer.brand} ${computer.model} - S/N: ${computer.serialNumber}`,
+            severity: 'danger',
+            confirmText: 'Supprimer définitivement',
+            cancelText: 'Annuler'
+        });
+
+        if (!confirmed) return;
         try {
             await apiService.deleteComputer(computer.id);
             showNotification('success', 'Ordinateur supprimé.');
@@ -258,6 +271,17 @@ const ComputersPage = () => {
                 ]}
                 actions={
                     <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                        <ExportButton
+                            data={filteredComputers}
+                            columns={EXPORT_COLUMNS.computers}
+                            title="Inventaire Matériel - Anecoop"
+                            baseName="inventaire_ordinateurs"
+                            variant="outlined"
+                            size="medium"
+                            onExportComplete={(format, success) => {
+                                if (success) showNotification('success', `Export ${format.toUpperCase()} réussi ! (${filteredComputers.length} ordinateurs)`);
+                            }}
+                        />
                         <Button variant="outlined" startIcon={<MouseIcon />} onClick={() => setDialog({ type: 'accessories' })}>Gérer les accessoires</Button>
                         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDialog({ type: 'computer' })}>Ajouter</Button>
                         <Tooltip title="Actualiser"><IconButton onClick={() => invalidate('computers')} color="primary"><RefreshIcon /></IconButton></Tooltip>
@@ -307,6 +331,8 @@ const ComputersPage = () => {
             <LoanDialog open={dialog.type === 'loan'} onClose={() => setDialog({ type: null })} computer={dialog.data} users={users} itStaff={itStaff} computers={computers} loans={loans} onSave={handleCreateLoan} />
             <QuickLoanDialog open={dialog.type === 'quickLoan'} onClose={() => setDialog({ type: null })} computer={dialog.data} users={users} onSave={handleCreateLoan} />
             <Dialog open={dialog.type === 'accessories'} onClose={() => setDialog({ type: null })} maxWidth="lg" fullWidth><AccessoriesManagement /></Dialog>
+
+            <ConfirmDialogComponent />
         </Box>
     );
 };
