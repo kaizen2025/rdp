@@ -13,18 +13,11 @@ import {
     Dns as DnsIcon, People as PeopleIcon, GroupWork as GroupWorkIcon,
     LaptopChromebook as LaptopChromebookIcon, Settings as SettingsIcon, Logout as LogoutIcon,
     Dashboard as DashboardIcon, Computer as ComputerIcon, Chat as ChatIcon,
-<<<<<<< HEAD
     Notifications as NotificationsIcon, SmartToy as SmartToyIcon
 } from '@mui/icons-material';
 
 import { useApp } from '../contexts/AppContext';
 import { useUnreadMessages } from '../hooks/useUnreadMessages'; // ✅ NOUVEAU
-=======
-    Notifications as NotificationsIcon
-} from '@mui/icons-material';
-
-import { useApp } from '../contexts/AppContext';
->>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 import apiService from '../services/apiService';
 
 // Lazy load pages
@@ -34,10 +27,7 @@ const UsersManagementPage = lazy(() => import('../pages/UsersManagementPage'));
 const ConnectionsPage = lazy(() => import('../pages/ConnectionsPage'));
 const AdGroupsPage = lazy(() => import('../pages/AdGroupsPage'));
 const ComputerLoansPage = lazy(() => import('../pages/ComputerLoansPage'));
-<<<<<<< HEAD
 const AIAssistantPage = lazy(() => import('../pages/AIAssistantPage'));
-=======
->>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 const SettingsPage = lazy(() => import('../pages/SettingsPage'));
 const ChatDialog = lazy(() => import('../pages/ChatPage'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
@@ -55,7 +45,6 @@ const navItems = [
     { text: 'Serveurs', path: '/servers', icon: <DnsIcon /> },
     { text: 'Groupes AD', path: '/ad-groups', icon: <GroupWorkIcon /> },
     { text: 'Gestion Prêts', path: '/loans', icon: <LaptopChromebookIcon /> },
-<<<<<<< HEAD
     { text: 'Assistant IA', path: '/ai-assistant', icon: <SmartToyIcon /> },
 ];
 
@@ -64,14 +53,6 @@ function MainLayout({ onLogout, currentTechnician, onChatClick }) {
     const location = useLocation();
     const { events, isOnline, notifications: toastNotifications } = useApp();
     const { unreadCount } = useUnreadMessages(); // ✅ NOUVEAU hook pour messages non lus
-=======
-];
-
-function MainLayout({ onLogout, currentTechnician }) {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { events, isOnline, notifications: toastNotifications } = useApp();
->>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
     
     const [userMenuAnchor, setUserMenuAnchor] = useState(null);
     const [chatOpen, setChatOpen] = useState(false);
@@ -117,11 +98,7 @@ function MainLayout({ onLogout, currentTechnician }) {
                     <Chip label={isOnline ? "En ligne" : "Hors ligne"} color={isOnline ? "success" : "error"} size="small" sx={{ mr: 2 }} />
                     <Tooltip title={`${activeSessionsCount} session(s) active(s)`}><Chip icon={<ComputerIcon />} label={activeSessionsCount} color="primary" size="small" sx={{ mr: 2 }} onClick={() => navigate('/sessions')} /></Tooltip>
 
-<<<<<<< HEAD
                     <Tooltip title="Chat"><IconButton color="inherit" onClick={() => { setChatOpen(true); if (onChatClick) onChatClick(); }}><Badge badgeContent={unreadCount} color="error"><ChatIcon /></Badge></IconButton></Tooltip>
-=======
-                    <Tooltip title="Chat"><IconButton color="inherit" onClick={() => setChatOpen(true)}><ChatIcon /></IconButton></Tooltip>
->>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
                     <Tooltip title="Notifications"><IconButton color="inherit" onClick={() => setNotificationsPanelOpen(true)}><Badge badgeContent={unreadNotifsCount} color="error"><NotificationsIcon /></Badge></IconButton></Tooltip>
                     
                     <Tooltip title="Menu utilisateur"><IconButton onClick={(e) => setUserMenuAnchor(e.currentTarget)} sx={{ p: 1, ml: 1 }}><Avatar sx={{ bgcolor: 'secondary.main', width: 32, height: 32 }}>{currentTechnician?.avatar || 'IT'}</Avatar></IconButton></Tooltip>
@@ -180,10 +157,7 @@ function MainLayout({ onLogout, currentTechnician }) {
                             <Route path="/servers" element={<ConnectionsPage />} />
                             <Route path="/ad-groups" element={<AdGroupsPage />} />
                             <Route path="/loans" element={<ComputerLoansPage />} />
-<<<<<<< HEAD
                             <Route path="/ai-assistant" element={<AIAssistantPage />} />
-=======
->>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
                             <Route path="*" element={<Navigate to="/dashboard" replace />} />
                         </Routes>
                     </Suspense>

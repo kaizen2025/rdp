@@ -44,9 +44,9 @@ import {
     Settings as SettingsIcon
 } from '@mui/icons-material';
 
-import ChatInterfaceDocuCortex from '../components/ai/ChatInterfaceDocuCortex'; // ✅ NOUVEAU
-import DocumentUploader from '../components/ai/DocumentUploader';
-import NetworkConfigPanel from '../components/ai/NetworkConfigPanel'; // ✅ NOUVEAU
+import ChatInterfaceDocuCortex from '../components/AI/ChatInterfaceDocuCortex';
+import DocumentUploader from '../components/AI/DocumentUploader';
+import NetworkConfigPanel from '../components/AI/NetworkConfigPanel';
 import apiService from '../services/apiService';
 
 const AIAssistantPage = () => {
