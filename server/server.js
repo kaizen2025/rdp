@@ -1,0 +1,215 @@
+// server/server.js - VERSION FINALE ULTRA-RAPIDE
+
+// ... (tous les imports restent les mêmes)
+const express = require('express');
+const cors = require('cors');
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const os = require('os');
+const path = require('path');
+
+const configService = require('../backend/services/configService');
+const databaseService = require('../backend/services/databaseService');
+const notificationService = require('../backend/services/notificationService');
+const dataService = require('../backend/services/dataService');
+const rdsService = require('../backend/services/rdsService');
+const technicianService = require('../backend/services/technicianService');
+const userService = require('../backend/services/userService');
+const adCacheService = require('../backend/services/adCacheService');
+const apiRoutes = require('./apiRoutes');
+const aiRoutes = require('./aiRoutes');
+const { findAllPorts, savePorts, isPortAvailable } = require('../backend/utils/portUtils');
+
+
+// ... (le début du fichier jusqu'à startServer reste identique)
+let API_PORT = 3002;
+let WS_PORT = 3003;
+const app = express();
+const server = http.createServer(app);
+let wss;
+
+console.log("=============================================");
+console.log(" Démarrage du serveur RDS Viewer...");
+console.log("=============================================");
+
+function getAllowedOrigins() {
+    const origins = new Set();
+    for (let i = 3000; i <= 3010; i++) {
+        origins.add(`http://localhost:${i}`);
+        origins.add(`http://127.0.0.1:${i}`);
+    }
+    origins.add(`http://localhost:${API_PORT}`);
+    origins.add(`http://127.0.0.1:${API_PORT}`);
+    origins.add(`http://${os.hostname()}:${API_PORT}`);
+    return Array.from(origins);
+}
+app.use(cors({
+    origin: function (origin, callback) {
+        const allowedOrigins = getAllowedOrigins();
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.warn(`Origine non autorisée par CORS: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    }
+}));
+app.use(express.json());
+
+function initializeWebSocket() {
+    wss = new WebSocketServer({ port: WS_PORT });
+    
+    // Configuration heartbeat pour détecter connexions mortes
+    const heartbeatInterval = setInterval(() => {
+        wss.clients.forEach(ws => {
+            if (ws.isAlive === false) {
+                console.log('🔌 Connexion WebSocket morte détectée, fermeture...');
+                return ws.terminate();
+            }
+            ws.isAlive = false;
+            ws.ping();
+        });
+    }, 30000); // Vérification toutes les 30 secondes
+    
+    wss.on('connection', ws => {
+        console.log('🔌 Nouveau client WebSocket connecté.');
+        ws.isAlive = true;
+        
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
+        
+        ws.on('close', () => console.log('🔌 Client WebSocket déconnecté.'));
+        ws.on('error', (error) => console.error('❌ Erreur WebSocket:', error));
+    });
+    
+    wss.on('close', () => {
+        clearInterval(heartbeatInterval);
+    });
+    
+    console.log(`✅ WebSocket initialisé sur le port ${WS_PORT} avec heartbeat`);
+}
+
+function broadcast(data) {
+    if (!wss) return;
+    const jsonData = JSON.stringify(data);
+    wss.clients.forEach(client => {
+        if (client.readyState === client.OPEN) client.send(jsonData);
+    });
+}
+
+function startBackgroundTasks() {
+    console.log('🕒 Planification des tâches de fond...');
+    
+    const runAsyncTask = (name, taskFn, interval, initialDelay = 2000) => {
+        const run = async () => {
+            console.log(`[Task: ${name}] 🚀 Démarrage...`);
+            try {
+                await taskFn();
+                console.log(`[Task: ${name}] ✅ Terminé.`);
+            } catch (error) {
+                console.error(`[Task: ${name}] ❌ Erreur:`, error);
+            }
+        };
+        setTimeout(run, initialDelay);
+        setInterval(run, interval);
+    };
+
+    // ✅ NOUVEAU : Synchronisation Excel en tâche de fond
+    runAsyncTask('Excel Sync', async () => {
+        const syncResult = await userService.syncUsersFromExcel(false);
+        if (syncResult.success && syncResult.usersCount > 0) {
+            broadcast({ type: 'data_updated', payload: { entity: 'excel_users' } });
+        }
+    }, 10 * 60 * 1000, 5000); // Toutes les 10 min, premier lancement après 5s
+
+    runAsyncTask('RDS Sessions', async () => {
+        const result = await rdsService.refreshAndStoreRdsSessions();
+        if (result.success) broadcast({ type: 'data_updated', payload: { entity: 'rds_sessions' } });
+    }, 30 * 1000);
+
+    runAsyncTask('Loan Check', async () => {
+        const loans = await dataService.getLoans();
+        const settings = await dataService.getLoanSettings();
+        if (settings.autoNotifications) {
+            const newNotifications = await notificationService.checkAllLoansForNotifications(loans, settings);
+            if (newNotifications?.length > 0) {
+                broadcast({ type: 'data_updated', payload: { entity: 'notifications' } });
+            }
+        }
+    }, 15 * 60 * 1000);
+
+    runAsyncTask('Technician Presence', technicianService.updateAllTechniciansPresence, 2 * 60 * 1000);
+    runAsyncTask('AD Status Cache', adCacheService.updateUserAdStatuses, 5 * 60 * 1000, 15000); // Lancement après 15s
+
+    console.log('✅ Tâches de fond planifiées.');
+}
+
+async function startServer() {
+    try {
+        const isProduction = process.env.NODE_ENV === 'production' || process.env.RUNNING_IN_ELECTRON === 'true';
+        if (isProduction) {
+            API_PORT = 3002; WS_PORT = 3003;
+        } else {
+            const ports = await findAllPorts({ http: { start: 3002, end: 3012 }, websocket: { start: 3003, end: 3013 } });
+            API_PORT = ports.http; WS_PORT = ports.websocket;
+            await savePorts(ports);
+        }
+
+        await configService.loadConfigAsync();
+        if (!configService.isConfigurationValid()) {
+            console.error("\n❌ Démarrage en mode dégradé (config invalide).");
+            app.use('/api', apiRoutes(() => {}));
+            initializeWebSocket();
+            server.listen(API_PORT, () => console.log(`\n📡 Serveur dégradé sur http://localhost:${API_PORT}`));
+            return;
+        }
+        console.log('✅ Configuration chargée.');
+
+        // Connexion à la base de données avec système de retry
+        try {
+            await databaseService.connectWithRetry();
+            console.log('✅ Base de données connectée avec succès.');
+        } catch (dbError) {
+            console.error('⚠️  ATTENTION: Impossible de se connecter à la base de données.');
+            console.error('   L\'application va démarrer en mode dégradé.');
+            console.error('   Certaines fonctionnalités seront limitées.');
+        }
+        
+        // ✅ SUPPRESSION de la synchro bloquante ici
+
+        initializeWebSocket();
+        app.use('/api', apiRoutes(broadcast));
+        app.use('/api/ai', aiRoutes(broadcast));
+        console.log('✅ Routes API configurées.');
+        
+        // Démarrage des tâches de fond APRÈS que le serveur soit prêt
+        startBackgroundTasks();
+
+        if (isProduction) {
+            const buildPath = path.join(__dirname, '..', 'build');
+            app.use(express.static(buildPath));
+            app.get('*', (req, res) => res.sendFile(path.join(buildPath, 'index.html')));
+        }
+
+        server.listen(API_PORT, () => {
+            console.log(`\n\n🚀 SERVEUR PRÊT !`);
+            console.log(`   - API sur http://localhost:${API_PORT}`);
+            console.log(`   - WebSocket sur le port ${WS_PORT}\n`);
+        });
+    } catch (error) {
+        console.error("❌ ERREUR CRITIQUE AU DÉMARRAGE :", error.message);
+        process.exit(1);
+    }
+}
+
+startServer();
+
+process.on('SIGINT', () => {
+    console.log('\nFermeture propre du serveur...');
+    if (wss) wss.close();
+    server.close(() => {
+        databaseService.close();
+        process.exit(0);
+    });
+});

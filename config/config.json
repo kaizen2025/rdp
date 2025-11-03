@@ -1,0 +1,53 @@
+{
+  "appPasswordHash": "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918",
+  "domain": "anecoopfr.local",
+  "username": "admin_anecoop",
+  "password": "vCQhNZ2aY2v!",
+  "excelFilePath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\Data_utilisateur_partage.xlsx",
+  "databasePath": "\\\\192.168.1.230\\Donnees\\Informatique\\PROGRAMMES\\Programme RDS\\RDS Viewer Group\\rds_viewer_data.sqlite",
+  "updateUrl": "http://192.168.1.232/update/",
+  "rds_servers": [
+    "SRV-RDS-1",
+    "SRV-RDS-2",
+    "SRV-RDS-3",
+    "SRV-RDS-4"
+  ],
+  "server_groups": {
+    "🏢 Infrastructure": ["SRV-AD-1", "SRV-AD-2", "SRV-AD-FLORENSUD", "SRV-DATA", "SRV-VPN-EDI"],
+    "🖥️ Services RDS": ["SRV-RDS-1", "SRV-RDS-2", "SRV-RDS-3", "SRV-RDS-4", "SRV-TSE-FLORENSUD"],
+    "📊 Applications": ["HRM-V9", "SAGERADIO64B", "SAGESEI_DOMAINENOK", "SRV-DIMENSION", "SRV-HOROQUARTZ", "SRV-ORACLE-SAGE", "SRV-QLIKVIEW", "SRV-QV", "SRV-SYRACUSE", "ServeurGED_DOMAINENOK", "ServeurQV_DOMAINENOK"],
+    "🔧 Autres": ["SRV-CENTOS-ZABBIX", "SRV-DIA", "SRWEXTRA01", "SRWINTRA01"]
+  },
+  "ad_groups": {
+    "VPN": { "name": "VPN", "description": "Accès VPN distant", "type": "Sécurité" },
+    "Sortants_responsables": { "name": "Sortants_responsables", "description": "Accès Internet complet", "type": "Sécurité" }
+  },
+  "it_technicians": [
+    { "id": "kevin_bivia", "name": "Kevin BIVIA", "position": "Chef de projet", "email": "kevin.bivia@anecoop.fr", "isActive": true, "permissions": ["admin", "config", "loans", "users", "servers", "reports"], "avatar": "KB" },
+    { "id": "meher_benhassine", "name": "Meher BENHASSINE", "position": "Chef de projet", "email": "meher.benhassine@anecoop.fr", "isActive": true, "permissions": ["admin", "loans", "users", "servers", "reports"], "avatar": "MB" },
+    { "id": "christelle_moles", "name": "Christelle MOLES", "position": "Responsable informatique", "email": "christelle.moles@anecoop.fr", "isActive": true, "permissions": ["admin", "config", "loans", "users", "servers", "reports"], "avatar": "CM" },
+    { "id": "macha_anton", "name": "Macha ANTON", "position": "Alternante informatique", "email": "macha.anton@anecoop.fr", "isActive": true, "permissions": ["loans", "users", "reports"], "avatar": "MA" }
+  ],
+  "it_staff": ["Kevin BIVIA", "Meher BENHASSINE", "Macha ANTON", "Christelle MOLES"],
+  "loans": { "maxLoanDays": 90, "maxExtensions": 3, "autoNotifications": true },
+  "notifications": { "enabled": true, "loanReminders": true, "overdueLoanAlerts": true },
+  "ui": { "theme": "light", "autoRefresh": true, "compactView": false },
+  "excelColumnMapping": {
+    "Identifiant": "username",
+    "Nom complet": "displayName",
+    "Serveur": "server",
+    "Mot de passe": "password",
+    "Office": "officePassword",
+    "Email": "email",
+    "Service": "department"
+  },
+  "networkDocuments": {
+    "serverPath": "\\\\192.168.1.230\\Donnees",
+    "workingDirectory": "",
+    "autoIndex": true,
+    "scanInterval": 30,
+    "allowedExtensions": ["*"],
+    "excludedFolders": ["Temp", "Backup", "$RECYCLE.BIN", "System Volume Information", "node_modules", ".git"],
+    "maxFileSize": 104857600
+  }
+}

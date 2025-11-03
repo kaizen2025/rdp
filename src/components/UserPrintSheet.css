@@ -1,0 +1,102 @@
+/* src/components/UserPrintSheet.css - Styles optimisés pour l'impression PDF sur demi-page */
+
+/* 
+  ======================================
+  STYLES POUR L'APERÇU À L'ÉCRAN (PREVIEW)
+  ======================================
+*/
+@media screen {
+    .print-sheet {
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        margin: 20px auto;
+        max-width: 210mm;
+    }
+}
+
+/* 
+  ======================================
+  STYLES POUR L'IMPRESSION - PRIORITÉ ABSOLUE
+  ======================================
+*/
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 5mm; /* Marges encore plus réduites pour maximiser l'espace sur demi-page */
+    }
+    
+    body, html {
+        background: white !important;
+        color: black !important;
+        width: 100%;
+        height: 100%;
+    }
+
+    * {
+        -webkit-print-color-adjust: exact !important;
+        color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+    }
+    
+    .print-sheet {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 8pt !important; /* Taille de police réduite pour compacter */
+        line-height: 1.2 !important;
+        page-break-after: always !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+        max-height: 148mm !important; /* Limite à une demi-page A4 (environ 148mm) */
+    }
+    
+    .no-print,
+    button,
+    .MuiButton-root,
+    .MuiDialog-root,
+    .MuiAppBar-root {
+        display: none !important;
+    }
+    
+    .section-no-break,
+    .confidential-info,
+    .support-section {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    
+    .confidential-info {
+        background-color: #ffebee !important;
+        border: 1px solid #f44336 !important; /* Bordure plus fine */
+    }
+    
+    /* AFFICHER LES MOTS DE PASSE À L'IMPRESSION */
+    .password-field {
+        font-family: 'Courier New', monospace !important;
+        font-weight: bold !important;
+        background-color: #ffcdd2 !important;
+        border: 1px dashed #f44336 !important;
+    }
+    
+    .support-section {
+        background-color: #e3f2fd !important;
+        border: 1px solid #2196f3 !important;
+    }
+
+    .print-footer {
+        border-top: 1px solid #ccc !important;
+        padding-top: 4pt !important; /* Réduit */
+        margin-top: 8pt !important; /* Réduit */
+        page-break-before: auto;
+    }
+
+    img, svg {
+        max-width: 100% !important;
+    }
+}

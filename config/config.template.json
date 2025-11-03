@@ -1,0 +1,29 @@
+{
+  "databasePath": "C:\\ProgramData\\RDS_Viewer_Group\\rds_viewer_data.sqlite",
+  "excelFilePath": "\\\\CHEMIN_RESEAU\\vers\\votre\\fichier_utilisateurs.xlsx",
+  "updateUrl": "http://VOTRE_SERVEUR_DE_MAJ/update/",
+  "excelColumnMapping": {
+    "Identifiant": "username",
+    "Mot de passe": "password",
+    "Office": "officePassword",
+    "Nom complet": "displayName",
+    "Service": "department",
+    "Email": "email",
+    "Serveur": "server"
+  },
+  "rds_servers": [
+    "SRV-RDS-1",
+    "SRV-RDS-2"
+  ],
+  "domain": "VOTRE_DOMAINE.local",
+  "username": "VOTRE_USER_ADMIN_AD",
+  "password": "VOTRE_MOT_DE_PASSE_ADMIN_AD",
+  "ad_groups": {
+    "VPN": { "name": "VPN", "description": "Accès VPN distant", "type": "Sécurité" },
+    "Sortants_responsables": { "name": "Sortants_responsables", "description": "Accès Internet complet", "type": "Sécurité" }
+  },
+  "it_technicians": [
+    { "id": "login_technicien", "name": "Prénom NOM", "position": "Administrateur", "email": "email@domaine.com", "isActive": true, "permissions": ["admin"], "avatar": "PN" }
+  ],
+  "it_staff": ["Prénom NOM"]
+}

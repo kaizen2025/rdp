@@ -1,0 +1,122 @@
+// src/App.js - VERSION AVEC CACHE PROVIDER
+
+import React, { useState, useEffect } from 'react';
+import { HashRouter as Router } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { fr } from 'date-fns/locale';
+
+import { AppProvider } from './contexts/AppContext';
+import { CacheProvider } from './contexts/CacheContext'; // ✅ IMPORT
+import LoginPage from './pages/LoginPage';
+import MainLayout from './layouts/MainLayout';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import ToastNotificationSystem from './components/ToastNotificationSystem'; // ✅ NOUVEAU
+import apiService from './services/apiService';
+import theme from './styles/theme';
+import { Dialog } from '@mui/material'; // Importer Dialog
+
+// ✅ CORRECTION ARIA-HIDDEN
+// On surcharge le comportement par défaut de tous les dialogues de l'application
+Dialog.defaultProps = {
+    ...Dialog.defaultProps,
+    hideBackdrop: false, // Empêche MUI de mettre aria-hidden="true" sur le body
+};
+
+function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [currentTechnician, setCurrentTechnician] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [configError, setConfigError] = useState(null);
+    
+    // Placeholder pour future fonctionnalité de chat
+    const setChatDialogOpen = () => {
+        // TODO: Implémenter dialogue de chat
+        console.log('Chat dialog feature coming soon');
+    };
+
+    useEffect(() => {
+        const checkHealthAndAuth = async () => {
+            try {
+                await apiService.checkServerHealth();
+                setConfigError(null);
+            } catch (error) {
+                const errorMessage = error.response?.data?.message || error.message || "Erreur de communication avec le serveur.";
+                setConfigError(errorMessage);
+            }
+            const storedTechnicianId = localStorage.getItem('currentTechnicianId');
+            if (storedTechnicianId) {
+                setCurrentTechnician({ id: storedTechnicianId });
+                setIsAuthenticated(true);
+            }
+            setIsLoading(false);
+        };
+        checkHealthAndAuth();
+    }, []);
+
+    const handleLoginSuccess = (technician) => {
+        setCurrentTechnician(technician);
+        setIsAuthenticated(true);
+    };
+
+    const handleLogout = () => {
+        apiService.logout();
+        setIsAuthenticated(false);
+        setCurrentTechnician(null);
+    };
+
+    if (isLoading) {
+        return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
+    }
+
+    const ConfigErrorAlert = () => (
+        configError && (
+            <Alert severity="error" sx={{ m: 2, borderRadius: 1 }}>
+                <AlertTitle>Erreur Critique du Serveur</AlertTitle>
+                {configError}
+            </Alert>
+        )
+    );
+
+    return (
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={fr}>
+                <AppProvider>
+                    <Router>
+                        {!isAuthenticated ? (
+                            <>
+                                <ConfigErrorAlert />
+                                <LoginPage onLoginSuccess={handleLoginSuccess} />
+                            </>
+                        ) : (
+                            <ErrorBoundary>
+                                {/* ✅ ENVELOPPER AVEC LE CACHE PROVIDER */}
+                                <CacheProvider>
+                                    <ConfigErrorAlert />
+                                    <MainLayout
+                                        onLogout={handleLogout}
+                                        currentTechnician={currentTechnician}
+                                        onChatClick={() => setChatDialogOpen(true)}
+                                    />
+                                    {/* ✅ NOUVEAU: Système de notifications toast global */}
+                                    <ToastNotificationSystem 
+                                        onChatClick={() => setChatDialogOpen(true)}
+                                    />
+                                </CacheProvider>
+                            </ErrorBoundary>
+                        )}
+                    </Router>
+                </AppProvider>
+            </LocalizationProvider>
+        </ThemeProvider>
+    );
+}
+
+export default App;
