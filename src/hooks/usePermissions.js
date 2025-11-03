@@ -3,12 +3,12 @@
  * Utilise le contexte de l'application et le service de permissions
  */
 
-import { useContext, useEffect, useMemo } from 'react';
-import { AppContext } from '../contexts/AppContext';
+import { useEffect, useMemo } from 'react';
+import { useApp } from '../contexts/AppContext';
 import permissionService from '../services/permissionService';
 
 export const usePermissions = () => {
-  const { config, currentTechnician } = useContext(AppContext);
+  const { config, currentTechnician } = useApp();
 
   // Initialiser le service de permissions
   useEffect(() => {
