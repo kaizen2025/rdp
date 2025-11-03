@@ -13,6 +13,7 @@ class ApiService {
     request = async (endpoint, options = {}) => {
         const url = `${this.baseURL}${endpoint}`;
         const techId = this.currentTechnicianId;
+<<<<<<< HEAD
         
         // ✅ CORRECTION: Ne pas forcer Content-Type si le body est FormData
         // Le navigateur définit automatiquement multipart/form-data avec boundary
@@ -20,6 +21,9 @@ class ApiService {
         if (!(options.body instanceof FormData)) {
             headers['Content-Type'] = headers['Content-Type'] || 'application/json';
         }
+=======
+        const headers = { 'Content-Type': 'application/json', ...options.headers };
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
         if (techId) { headers['x-technician-id'] = techId; }
         const config = { ...options, headers };
 
@@ -130,6 +134,7 @@ class ApiService {
     editChatMessage = async (messageId, channelId, newText) => this.request(`/chat/messages/${messageId}`, { method: 'PUT', body: JSON.stringify({ channelId, newText }) })
     deleteChatMessage = async (messageId, channelId) => this.request(`/chat/messages/${messageId}`, { method: 'DELETE', body: JSON.stringify({ channelId }) })
     toggleChatReaction = async (messageId, channelId, emoji) => this.request('/chat/reactions', { method: 'POST', body: JSON.stringify({ messageId, channelId, emoji }) })
+<<<<<<< HEAD
 
     // ✅ AGENT IA
     // Health & Initialization
@@ -670,6 +675,8 @@ class ApiService {
             throw new Error(`Impossible de synchroniser les documents: ${error.message}`);
         }
     }
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 }
 
 // Création d'une instance unique (singleton) pour toute l'application

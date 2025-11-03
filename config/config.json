@@ -40,6 +40,7 @@
     "Office": "officePassword",
     "Email": "email",
     "Service": "department"
+<<<<<<< HEAD
   },
   "networkDocuments": {
     "serverPath": "\\\\192.168.1.230\\Donnees",
@@ -49,5 +50,7 @@
     "allowedExtensions": ["*"],
     "excludedFolders": ["Temp", "Backup", "$RECYCLE.BIN", "System Volume Information", "node_modules", ".git"],
     "maxFileSize": 104857600
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
   }
 }

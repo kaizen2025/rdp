@@ -17,7 +17,10 @@ import { CacheProvider } from './contexts/CacheContext'; // ✅ IMPORT
 import LoginPage from './pages/LoginPage';
 import MainLayout from './layouts/MainLayout';
 import ErrorBoundary from './components/common/ErrorBoundary';
+<<<<<<< HEAD
 import ToastNotificationSystem from './components/ToastNotificationSystem'; // ✅ NOUVEAU
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 import apiService from './services/apiService';
 import theme from './styles/theme';
 import { Dialog } from '@mui/material'; // Importer Dialog
@@ -34,12 +37,15 @@ function App() {
     const [currentTechnician, setCurrentTechnician] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [configError, setConfigError] = useState(null);
+<<<<<<< HEAD
     
     // Placeholder pour future fonctionnalité de chat
     const setChatDialogOpen = () => {
         // TODO: Implémenter dialogue de chat
         console.log('Chat dialog feature coming soon');
     };
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 
     useEffect(() => {
         const checkHealthAndAuth = async () => {
@@ -103,11 +109,14 @@ function App() {
                                     <MainLayout
                                         onLogout={handleLogout}
                                         currentTechnician={currentTechnician}
+<<<<<<< HEAD
                                         onChatClick={() => setChatDialogOpen(true)}
                                     />
                                     {/* ✅ NOUVEAU: Système de notifications toast global */}
                                     <ToastNotificationSystem 
                                         onChatClick={() => setChatDialogOpen(true)}
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
                                     />
                                 </CacheProvider>
                             </ErrorBoundary>

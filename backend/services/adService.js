@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 // backend/services/adService.js - VERSION FINALE AVEC RECHERCHE DE GROUPES ET MODE OFFLINE
+=======
+// backend/services/adService.js - VERSION CORRIGÉE
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 
 const { executeEncodedPowerShell } = require('./powershellService');
 const databaseService = require('./databaseService');
 
+<<<<<<< HEAD
 // ... (parseAdError et les autres fonctions existantes restent identiques)
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 function parseAdError(errorMessage) {
     if (!errorMessage) return "Une erreur inconnue est survenue.";
     const lowerError = errorMessage.toLowerCase();
@@ -30,7 +37,10 @@ async function searchAdUsers(searchTerm) {
     }
 }
 
+<<<<<<< HEAD
 // ✅ NOUVELLE FONCTION
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 async function searchAdGroups(searchTerm) {
     const psScript = `
         Import-Module ActiveDirectory -ErrorAction Stop
@@ -41,16 +51,24 @@ async function searchAdGroups(searchTerm) {
         const jsonOutput = await executeEncodedPowerShell(psScript, 10000);
         const groups = JSON.parse(jsonOutput || '[]');
         const groupsArray = Array.isArray(groups) ? groups : [groups];
+<<<<<<< HEAD
         return groupsArray.map(g => g.Name); // Renvoie un tableau de noms de groupes
+=======
+        return groupsArray.map(g => g.Name);
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
     } catch (e) {
         console.error(`Erreur recherche de groupes AD pour '${searchTerm}':`, parseAdError(e.message));
         return [];
     }
 }
 
+<<<<<<< HEAD
 // ... (toutes les autres fonctions comme getAdGroupMembers, addUserToGroup, etc. restent identiques)
 async function getAdGroupMembers(groupName) {
     // ✅ MODE OFFLINE: Retourne tableau vide si pas de réseau AD
+=======
+async function getAdGroupMembers(groupName) {
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
     if (databaseService.isInOfflineMode()) {
         console.warn(`⚠️  Mode offline activé - Impossible d'accéder aux groupes AD`);
         return [];
@@ -80,7 +98,10 @@ async function getAdGroupMembers(groupName) {
         return membersArray.map(m => ({ ...m, sam: m.SamAccountName, name: m.Name || m.DisplayName }));
     } catch (e) {
         console.error(`Erreur lors de la récupération des membres du groupe AD '${groupName}':`, parseAdError(e.message));
+<<<<<<< HEAD
         // ✅ NE PAS CRASHER - Retourner tableau vide
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
         return [];
     }
 }
@@ -286,9 +307,13 @@ async function createAdUser(userData) {
     }
 }
 
+<<<<<<< HEAD
 
 async function getAdOUs(parentId = null) {
     // ✅ MODE OFFLINE: Retourne tableau vide si pas de réseau AD
+=======
+async function getAdOUs(parentId = null) {
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
     if (databaseService.isInOfflineMode()) {
         console.warn(`⚠️  Mode offline activé - Impossible d'accéder aux OUs Active Directory`);
         return [];
@@ -318,11 +343,15 @@ async function getAdOUs(parentId = null) {
         return Array.isArray(ous) ? ous : [ous];
     } catch (e) {
         console.error(`Erreur lors de la récupération des OUs AD pour '${parentId || 'root'}':`, parseAdError(e.message));
+<<<<<<< HEAD
         // ✅ NE PAS CRASHER - Retourner tableau vide
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
         return [];
     }
 }
 
+<<<<<<< HEAD
 module.exports = {
     searchAdUsers,
     searchAdGroups, // ✅ EXPORT DE LA NOUVELLE FONCTION
@@ -340,6 +369,9 @@ module.exports = {
 
 async function getAdUsersInOU(ouDN) {
     // ✅ MODE OFFLINE: Retourne tableau vide si pas de réseau AD
+=======
+async function getAdUsersInOU(ouDN) {
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
     if (databaseService.isInOfflineMode()) {
         console.warn(`⚠️  Mode offline activé - Impossible d'accéder aux utilisateurs AD`);
         return [];
@@ -357,7 +389,28 @@ async function getAdUsersInOU(ouDN) {
         return Array.isArray(users) ? users : [users];
     } catch (e) {
         console.error(`Erreur lors de la récupération des utilisateurs de l'OU '${ouDN}':`, parseAdError(e.message));
+<<<<<<< HEAD
         // ✅ NE PAS CRASHER - Retourner tableau vide
         return [];
     }
 }
+=======
+        return [];
+    }
+}
+
+module.exports = {
+    searchAdUsers,
+    searchAdGroups,
+    getAdGroupMembers,
+    addUserToGroup,
+    removeUserFromGroup,
+    getAdUserDetails,
+    disableAdUser,
+    enableAdUser,
+    resetAdUserPassword,
+    createAdUser,
+    getAdOUs,
+    getAdUsersInOU,
+};
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea

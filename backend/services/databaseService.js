@@ -6,11 +6,14 @@ const configService = require('./configService');
 const fs = require('fs');
 
 let db;
+<<<<<<< HEAD
 let connectionAttempts = 0;
 const MAX_RETRIES = 2; // Réduit à 2 tentatives rapides
 const RETRY_DELAY_MS = 500; // 500ms entre tentatives (au lieu de 2s)
 let isOfflineMode = false; // Mode offline activé si serveur inaccessible
 const LOCAL_DB_PATH = path.join(__dirname, '../../data/rds_viewer_data.sqlite'); // Base locale de secours
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 
 const schema = `
     PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;
@@ -100,6 +103,7 @@ function runMigrationIfNecessary() {
     }
 }
 
+<<<<<<< HEAD
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -191,6 +195,8 @@ function connectToLocalDatabase() {
     }
 }
 
+=======
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
 function connect() {
     if (db) return;
     const dbPath = configService.appConfig.databasePath;
@@ -234,7 +240,12 @@ function prepare(sql) { connect(); try { return db.prepare(sql); } catch (error)
 function transaction(fn) { connect(); try { return db.transaction(fn); } catch (error) { console.error("Erreur transaction:", error); throw error; } }
 function exec(sql) { connect(); try { return db.exec(sql); } catch (error) { console.error(`Erreur SQL (exec):`, error); throw error; } }
 function getConnection() { connect(); return db; }
+<<<<<<< HEAD
 function isInOfflineMode() { return isOfflineMode; }
 function getDatabasePath() { return isOfflineMode ? LOCAL_DB_PATH : configService.appConfig.databasePath; }
 
 module.exports = { connect, connectWithRetry, close, run, get, all, prepare, transaction, exec, getConnection, isInOfflineMode, getDatabasePath };
+=======
+
+module.exports = { connect, close, run, get, all, prepare, transaction, exec, getConnection };
+>>>>>>> 450dedc5d374d1a778ce027ffc77fe956f62b2ea
